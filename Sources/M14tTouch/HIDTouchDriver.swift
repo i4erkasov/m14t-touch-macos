@@ -2,27 +2,24 @@ import IOKit.hid
 import CoreGraphics
 import Foundation
 
-/// Bridges the M14t's USB HID touch interface to the macOS cursor.
+/// Bridges the M14t's USB HID touch interface to the gesture pipeline.
 ///
-/// Responsibilities are deliberately narrow: open the HID device, translate the
-/// raw touch stream into screen coordinates (via `CoordinateMapper`), and emit
-/// mouse events (via `MouseEmitter`). Calibration math and event posting live in
-/// their own types, so this file is purely about *orchestration* and the touch
-/// state machine.
+/// Responsibilities are deliberately narrow: open the HID device, turn the raw
+/// touch stream into `TouchFrame`s (mapped through `CoordinateMapper`), and hand
+/// them to a `TouchEngine`. What a finger *means* is decided by the engine's
+/// recognizer, and how macOS is told is decided by its emitter — neither is this
+/// file's business (spec §32).
 ///
-/// ## Touch model
-/// A single contact maps directly to the left mouse button:
-/// - finger down  → `leftMouseDown`
-/// - finger moves → `leftMouseDragged` (only past the jitter threshold)
-/// - finger up    → `leftMouseUp`
-///
-/// A down-then-up with no movement is therefore a normal click; a down-move-up
-/// is a drag. No multi-finger gestures — this is intentionally the simple,
-/// rock-solid case.
+/// ## Frame cadence
+/// One frame is produced per HID value, not per report. The device reports X, Y
+/// and TipSwitch as separate values, so a frame can carry a new X against the
+/// previous Y. That is exactly what the pre-refactor driver did, and it is
+/// preserved so this refactor cannot be the cause of a behaviour change;
+/// report-level batching is a v0.2 decision (docs/v0.1-refactor-plan.md).
 final class HIDTouchDriver {
 
     private var config: TouchConfig
-    private let emitter = MouseEmitter()
+    private let engine: TouchEngine
 
     // IOKit
     private var manager: IOHIDManager?
@@ -34,14 +31,23 @@ final class HIDTouchDriver {
     // Auto-calibration: the tightest range observed so far
     private var observed = ObservedRange()
 
-    // Current touch sample and contact state
+    // Latest raw sample and contact state as reported by the device. This is
+    // hardware state, not gesture state — whether a held finger is a drag or a
+    // scroll is the recognizer's call.
     private var currentRawX: Double = 0
     private var currentRawY: Double = 0
-    private var isTouching = false
-    private var lastScreenPoint: CGPoint = .zero
+    private var isTipSwitchDown = false
 
     init(config: TouchConfig) {
         self.config = config
+
+        // Mouse mode is the only recognizer in v0.1. Step 7 replaces this with a
+        // factory driven by `--mode`, at which point touchscreen mode plugs in
+        // here and nothing else changes.
+        self.engine = TouchEngine(
+            recognizer: MouseModeRecognizer(dragThreshold: config.dragThreshold),
+            emitter: MouseEventEmitter()
+        )
 
         // Provisional calibration; refined once the device is connected.
         let initial = CalibrationData.identity
@@ -119,10 +125,8 @@ final class HIDTouchDriver {
     private func deviceRemoved() {
         log("🔌 Touch device disconnected")
         // Release any held button so the cursor doesn't get stuck pressed.
-        if isTouching {
-            emitter.post(.leftMouseUp, at: lastScreenPoint)
-            isTouching = false
-        }
+        isTipSwitchDown = false
+        logActions(engine.reset())
     }
 
     // MARK: - Calibration Resolution
@@ -195,46 +199,38 @@ final class HIDTouchDriver {
         case (HID.Page.genericDesktop.rawValue, HID.GenericDesktop.x.rawValue):
             currentRawX = Double(intVal)
             recordForAutoCalibration(x: Double(intVal))
-            emitDragIfMoved()
+            emitFrame()
 
         case (HID.Page.genericDesktop.rawValue, HID.GenericDesktop.y.rawValue):
             currentRawY = Double(intVal)
             recordForAutoCalibration(y: Double(intVal))
-            emitDragIfMoved()
+            emitFrame()
 
         case (HID.Page.digitizer.rawValue, HID.Digitizer.tipSwitch.rawValue):
-            updateContact(touching: intVal != 0)
+            isTipSwitchDown = intVal != 0
+            emitFrame()
 
         default:
             break
         }
     }
 
-    /// Finger made or broke contact with the surface.
-    private func updateContact(touching: Bool) {
-        if touching, !isTouching {
-            isTouching = true
-            lastScreenPoint = mapper.map(rawX: currentRawX, rawY: currentRawY)
-            emitter.post(.leftMouseDown, at: lastScreenPoint)
-            log("☝️  DOWN  → (\(Int(lastScreenPoint.x)),\(Int(lastScreenPoint.y)))")
-        } else if !touching, isTouching {
-            isTouching = false
-            emitter.post(.leftMouseUp, at: lastScreenPoint)
-            log("☝️  UP    → (\(Int(lastScreenPoint.x)),\(Int(lastScreenPoint.y)))")
-        }
-    }
-
-    /// While a finger is down, translate position changes into drag events.
-    private func emitDragIfMoved() {
-        guard isTouching else { return }
-        let point = mapper.map(rawX: currentRawX, rawY: currentRawY)
-        let moved = abs(point.x - lastScreenPoint.x) > config.dragThreshold
-                 || abs(point.y - lastScreenPoint.y) > config.dragThreshold
-        guard moved else { return }
-
-        emitter.post(.leftMouseDragged, at: point)
-        lastScreenPoint = point
-        log("☝️  DRAG  → (\(Int(point.x)),\(Int(point.y)))")
+    /// Publish the current sample as a frame.
+    ///
+    /// Called after every X, Y and TipSwitch value, so the mapping always uses
+    /// the calibration in force at that moment — `recordForAutoCalibration` runs
+    /// first, and a sample that widens the range is mapped with the widened one,
+    /// as before.
+    private func emitFrame() {
+        let contact = TouchPoint(
+            id: TouchPoint.primary,
+            position: mapper.map(rawX: currentRawX, rawY: currentRawY),
+            rawPosition: CGPoint(x: currentRawX, y: currentRawY),
+            isTouching: isTipSwitchDown,
+            pressure: nil,
+            timestamp: ProcessInfo.processInfo.systemUptime
+        )
+        logActions(engine.process(TouchFrame(contact: contact)))
     }
 
     // MARK: - Auto-calibration
@@ -250,6 +246,19 @@ final class HIDTouchDriver {
     }
 
     // MARK: - Helpers
+
+    /// Echo emitted actions, preserving the console output of the original
+    /// driver, which printed each press, drag and release as it posted it.
+    private func logActions(_ actions: [InputAction]) {
+        for action in actions {
+            switch action {
+            case .dragBegin(let p): log("☝️  DOWN  → (\(Int(p.x)),\(Int(p.y)))")
+            case .dragMove(let p):  log("☝️  DRAG  → (\(Int(p.x)),\(Int(p.y)))")
+            case .dragEnd(let p):   log("☝️  UP    → (\(Int(p.x)),\(Int(p.y)))")
+            default:                log("☝️  \(action)")
+            }
+        }
+    }
 
     private func describe(_ c: CalibrationData) -> String {
         "X \(Int(c.xMin))–\(Int(c.xMax))  Y \(Int(c.yMin))–\(Int(c.yMax))"
