@@ -35,6 +35,9 @@ final class HIDTouchDriver {
     private var currentRawY: Double = 0
     private var isTipSwitchDown = false
 
+    /// The device calibration was taken from, once one has actually sent input.
+    private var calibratedDevice: IOHIDDevice?
+
     /// - Parameter engine: the gesture pipeline to feed. Injected rather than
     ///   built here so the driver has no opinion on which mode is active — that
     ///   is chosen once, in `main.swift`, from `--mode`.
@@ -111,8 +114,6 @@ final class HIDTouchDriver {
         let vendor  = IOHIDDeviceGetProperty(device, kIOHIDVendorIDKey  as CFString) as? Int ?? 0
         let product = IOHIDDeviceGetProperty(device, kIOHIDProductIDKey as CFString) as? Int ?? 0
         log("🔌 Connected: \"\(name)\"  VID 0x\(hex(vendor))  PID 0x\(hex(product))")
-
-        applyCalibration(for: device)
     }
 
     private func deviceRemoved() {
@@ -120,9 +121,25 @@ final class HIDTouchDriver {
         // Release any held button so the cursor doesn't get stuck pressed.
         isTipSwitchDown = false
         logActions(engine.reset())
+        // Re-derive calibration from whichever device speaks up next.
+        calibratedDevice = nil
     }
 
     // MARK: - Calibration
+
+    /// Take calibration from the first device that actually sends input.
+    ///
+    /// The M14t presents *two* interfaces matching the driver's filter, and
+    /// resolving on connect meant the second silently overwrote the first — with
+    /// a descriptor range the panel never reports, putting touches in a fraction
+    /// of the screen. Only one of the two ever delivers values, so waiting for
+    /// input identifies the right one without having to guess from the
+    /// descriptor.
+    private func calibrateIfNeeded(from device: IOHIDDevice) {
+        guard calibratedDevice == nil else { return }
+        calibratedDevice = device
+        applyCalibration(for: device)
+    }
 
     /// Hand the descriptor range and any saved file to the controller, then put
     /// its verdict into the mapper.
@@ -146,24 +163,22 @@ final class HIDTouchDriver {
     }
 
     /// Read the logical X/Y range the device advertises in its HID descriptor.
+    ///
+    /// IOKit access only — which of the several declared ranges to believe is
+    /// `DescriptorRange`'s decision.
     private func readDescriptorRange(from device: IOHIDDevice) -> CalibrationData {
-        var range = CalibrationData.identity
         guard let elements = IOHIDDeviceCopyMatchingElements(
             device, nil, IOOptionBits(kIOHIDOptionsTypeNone)
-        ) as? [IOHIDElement] else { return range }
+        ) as? [IOHIDElement] else { return .identity }
 
-        for element in elements where IOHIDElementGetUsagePage(element) == HID.Page.genericDesktop.rawValue {
-            switch IOHIDElementGetUsage(element) {
-            case HID.GenericDesktop.x.rawValue:
-                range.xMin = Double(IOHIDElementGetLogicalMin(element))
-                range.xMax = Double(IOHIDElementGetLogicalMax(element))
-            case HID.GenericDesktop.y.rawValue:
-                range.yMin = Double(IOHIDElementGetLogicalMin(element))
-                range.yMax = Double(IOHIDElementGetLogicalMax(element))
-            default:
-                break
-            }
-        }
+        let range = DescriptorRange.range(from: elements.map {
+            DescriptorRange.Element(
+                usagePage: IOHIDElementGetUsagePage($0),
+                usage: IOHIDElementGetUsage($0),
+                logicalMin: IOHIDElementGetLogicalMin($0),
+                logicalMax: IOHIDElementGetLogicalMax($0)
+            )
+        })
         log("📐 Descriptor range: \(describe(range))")
         return range
     }
@@ -172,6 +187,8 @@ final class HIDTouchDriver {
 
     private func handle(_ value: IOHIDValue) {
         let element = IOHIDValueGetElement(value)
+        calibrateIfNeeded(from: IOHIDElementGetDevice(element))
+
         let page    = IOHIDElementGetUsagePage(element)
         let usage   = IOHIDElementGetUsage(element)
         let intVal  = IOHIDValueGetIntegerValue(value)
