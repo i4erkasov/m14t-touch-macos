@@ -4,10 +4,9 @@ import Foundation
 /// Reads the panel as a touchscreen rather than a large absolute touchpad
 /// (spec §7, §22, §35).
 ///
-/// This version recognises taps and nothing else. The two ways a contact stops
-/// being a tap — moving too far, or being held too long — are already here, but
-/// what they turn into arrives in later steps: scrolling in v0.2 step 5,
-/// long-press dragging in step 4.
+/// This version recognises taps and long-press drags. Moving far enough still
+/// ends the gesture without doing anything; that becomes scrolling in v0.2
+/// step 5.
 struct TouchscreenRecognizer: GestureRecognizer {
 
     let configuration: GestureConfiguration
@@ -20,8 +19,12 @@ struct TouchscreenRecognizer: GestureRecognizer {
         /// A finger is down and could still turn out to be a tap.
         case possibleTap(origin: CGPoint, startedAt: TimeInterval)
 
-        /// The contact left `possibleTap` and this version has nothing further
-        /// to do with it. Replaced by `scrolling` and `dragging` in steps 4–5.
+        /// Held long enough to become a drag. Carries the last emitted point,
+        /// which makes it impossible to consult a stale one while idle.
+        case dragging(lastPosition: CGPoint)
+
+        /// The contact moved too far to be a tap. Becomes `scrolling` in step 5;
+        /// until then the gesture simply ends.
         case abandoned
     }
 
@@ -52,17 +55,42 @@ struct TouchscreenRecognizer: GestureRecognizer {
                 return [.tap(position: origin)]
             }
 
+            // Time is checked before movement. If the deadline has already
+            // passed, the gesture is a drag and this frame's movement belongs
+            // to it — it is not the start of a scroll. In practice the ~100 Hz
+            // tick notices the deadline long before a finger travels far, so
+            // the two rarely compete in the same frame.
+            if contact.timestamp - startedAt > configuration.longPressDelay {
+                // Grabbing at the landing point, as a tap reports its landing
+                // point: drift within the threshold is noise, and the user
+                // pressed on what was under their finger when it went down.
+                state = .dragging(lastPosition: origin)
+                return [.dragBegin(position: origin)]
+            }
+
             if distance(from: origin, to: contact.position) > configuration.scrollThreshold {
                 state = .abandoned      // → scrolling, step 5
                 return []
             }
 
-            if contact.timestamp - startedAt > configuration.longPressDelay {
-                state = .abandoned      // → dragging, step 4
-                return []
+            return []
+
+        case .dragging(let lastPosition):
+            guard contact.isTouching else {
+                state = .idle
+                // Ends on the last point actually emitted, so the drag path has
+                // no final micro-jump. Unlike mouse mode, where the same
+                // behaviour is an inherited quirk, here it is a choice.
+                return [.dragEnd(position: lastPosition)]
             }
 
-            return []
+            // The same jitter filter mouse mode uses — a resting finger must not
+            // wander the grabbed object around.
+            guard distance(from: lastPosition, to: contact.position) > configuration.dragThreshold else {
+                return []
+            }
+            state = .dragging(lastPosition: contact.position)
+            return [.dragMove(position: contact.position)]
 
         case .abandoned:
             if !contact.isTouching { state = .idle }
@@ -71,10 +99,11 @@ struct TouchscreenRecognizer: GestureRecognizer {
     }
 
     mutating func reset() -> [InputAction] {
-        // Nothing to release: this version never presses anything until the
-        // gesture is already over.
-        state = .idle
-        return []
+        defer { state = .idle }
+        // A drag is the only state holding a button down. Without this, unplugging
+        // mid-drag would strand it pressed.
+        guard case .dragging(let lastPosition) = state else { return [] }
+        return [.dragEnd(position: lastPosition)]
     }
 
     /// Straight-line distance, unlike mouse mode's per-axis comparison.

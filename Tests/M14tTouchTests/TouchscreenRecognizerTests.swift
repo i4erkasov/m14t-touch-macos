@@ -106,8 +106,10 @@ final class TouchscreenRecognizerTests: XCTestCase {
     func testHoldingPastTheLongPressDelayIsNoLongerATap() {
         var recognizer = makeRecognizer()
         _ = recognizer.process(frame(100, 100, touching: true, at: 0))
-        _ = recognizer.process(frame(100, 100, touching: true, at: 0.5))
-        XCTAssertEqual(recognizer.process(frame(100, 100, touching: false, at: 0.6)), [])
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0.5))   // becomes a drag
+        // The release ends the drag rather than producing a tap.
+        XCTAssertEqual(recognizer.process(frame(100, 100, touching: false, at: 0.6)),
+                       [.dragEnd(position: CGPoint(x: 100, y: 100))])
     }
 
     func testHoldingExactlyToTheDelayIsStillATap() {
@@ -123,8 +125,89 @@ final class TouchscreenRecognizerTests: XCTestCase {
     func testTheDeadlineIsNoticedOnAMotionlessFrame() {
         var recognizer = makeRecognizer()
         _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        // No movement in this frame at all — only the clock advanced.
+        XCTAssertEqual(recognizer.process(frame(100, 100, touching: true, at: 0.41)).count, 1)
+    }
+
+    // MARK: - Long press to drag
+
+    // The press fires on a frame carrying no movement — the ScanTime tick. This
+    // is the branch that could not exist before step 2 published those frames.
+    func testHoldingPastTheDelayBeginsADrag() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        XCTAssertEqual(recognizer.process(frame(100, 100, touching: true, at: 0.41)),
+                       [.dragBegin(position: CGPoint(x: 100, y: 100))])
+    }
+
+    func testTheDragBeginsOnlyOnce() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
         _ = recognizer.process(frame(100, 100, touching: true, at: 0.41))
-        XCTAssertEqual(recognizer.process(frame(100, 100, touching: false, at: 0.42)), [])
+        XCTAssertEqual(recognizer.process(frame(100, 100, touching: true, at: 0.42)), [])
+    }
+
+    // Grabbed at the landing point, for the same reason a tap is reported there.
+    func testTheDragGrabsAtTheLandingPoint() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(105, 104, touching: true, at: 0.2))   // drift
+        XCTAssertEqual(recognizer.process(frame(105, 104, touching: true, at: 0.41)),
+                       [.dragBegin(position: CGPoint(x: 100, y: 100))])
+    }
+
+    func testMovementAfterTheGrabDrags() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0.41))
+        XCTAssertEqual(recognizer.process(frame(300, 400, touching: true, at: 0.5)),
+                       [.dragMove(position: CGPoint(x: 300, y: 400))])
+    }
+
+    // A resting finger must not walk the grabbed object around.
+    func testJitterDuringADragIsFiltered() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0.41))
+        XCTAssertEqual(recognizer.process(frame(101, 100, touching: true, at: 0.5)), [])
+    }
+
+    func testReleasingADragEndsIt() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0.41))
+        _ = recognizer.process(frame(300, 400, touching: true, at: 0.5))
+        XCTAssertEqual(recognizer.process(frame(305, 405, touching: false, at: 0.6)),
+                       [.dragEnd(position: CGPoint(x: 300, y: 400))])
+    }
+
+    // Moving away before the deadline is a scroll in the making, never a drag,
+    // however long the finger stays down afterwards.
+    func testMovingAwayBeforeTheDeadlineNeverBecomesADrag() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(400, 400, touching: true, at: 0.05))
+        XCTAssertEqual(recognizer.process(frame(400, 400, touching: true, at: 2.0)), [])
+        XCTAssertEqual(recognizer.process(frame(400, 400, touching: false, at: 2.1)), [])
+    }
+
+    // Unplugging mid-drag has to release the button; nothing else will.
+    func testResetDuringADragReleasesTheButton() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0.41))
+        _ = recognizer.process(frame(300, 400, touching: true, at: 0.5))
+        XCTAssertEqual(recognizer.reset(), [.dragEnd(position: CGPoint(x: 300, y: 400))])
+    }
+
+    func testATapWorksAfterADrag() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0.41))
+        _ = recognizer.process(frame(100, 100, touching: false, at: 0.5))
+        _ = recognizer.process(frame(700, 700, touching: true, at: 1.0))
+        XCTAssertEqual(recognizer.process(frame(700, 700, touching: false, at: 1.1)),
+                       [.tap(position: CGPoint(x: 700, y: 700))])
     }
 
     // MARK: - Sequencing
