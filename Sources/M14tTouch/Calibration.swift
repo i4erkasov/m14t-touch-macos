@@ -16,27 +16,37 @@ struct CalibrationData: Codable, Equatable {
     static let identity = CalibrationData(xMin: 0, xMax: 32767, yMin: 0, yMax: 32767)
 }
 
-/// Reads and writes calibration to `~/.m14ttouch.json`.
+/// Reads and writes calibration to a JSON file.
 ///
 /// Kept deliberately tiny and dependency-free: calibration is just four numbers,
 /// so a single JSON file is the simplest thing that survives reboots and is
 /// trivial for a user to inspect or hand-edit.
-enum CalibrationStore {
+///
+/// The location is a property rather than a hardcoded constant so tests can
+/// point it at a temporary directory. They otherwise would have to read and
+/// write the real `~/.m14ttouch.json` — which would destroy the calibration of
+/// whoever ran them.
+struct CalibrationStore {
 
     /// Location of the persisted calibration file.
-    static let url: URL = FileManager.default
-        .homeDirectoryForCurrentUser
-        .appendingPathComponent(".m14ttouch.json")
+    let url: URL
+
+    /// The store the driver uses: `~/.m14ttouch.json`.
+    static let shared = CalibrationStore(
+        url: FileManager.default
+            .homeDirectoryForCurrentUser
+            .appendingPathComponent(".m14ttouch.json")
+    )
 
     /// Load saved calibration, or `nil` if none exists / the file is unreadable.
-    static func load() -> CalibrationData? {
+    func load() -> CalibrationData? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         return try? JSONDecoder().decode(CalibrationData.self, from: data)
     }
 
     /// Persist calibration atomically. Failures are silent by design — a missed
     /// save simply means recalibrating next launch, never a crash.
-    static func save(_ calibration: CalibrationData) {
+    func save(_ calibration: CalibrationData) {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? encoder.encode(calibration) else { return }
@@ -45,7 +55,7 @@ enum CalibrationStore {
 
     /// Delete the saved calibration file.
     @discardableResult
-    static func reset() -> Bool {
+    func reset() -> Bool {
         (try? FileManager.default.removeItem(at: url)) != nil
     }
 }

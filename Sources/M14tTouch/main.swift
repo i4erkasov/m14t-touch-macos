@@ -64,8 +64,8 @@ case .listDisplays:
     exit(0)
 
 case .resetCalibration:
-    if CalibrationStore.reset() {
-        print("🗑️  Calibration reset (\(CalibrationStore.url.path))")
+    if CalibrationStore.shared.reset() {
+        print("🗑️  Calibration reset (\(CalibrationStore.shared.url.path))")
     } else {
         print("ℹ️  No saved calibration to reset.")
     }

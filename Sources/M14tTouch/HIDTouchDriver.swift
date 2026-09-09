@@ -25,11 +25,8 @@ final class HIDTouchDriver {
     private var manager: IOHIDManager?
 
     // Coordinate state
-    private var calibration: CalibrationData
     private var mapper: CoordinateMapper
-
-    // Auto-calibration: the tightest range observed so far
-    private var observed = ObservedRange()
+    private let calibrationController: CalibrationController
 
     // Latest raw sample and contact state as reported by the device. This is
     // hardware state, not gesture state — whether a held finger is a drag or a
@@ -49,9 +46,10 @@ final class HIDTouchDriver {
             emitter: MouseEventEmitter()
         )
 
+        self.calibrationController = CalibrationController(config: config)
+
         // Provisional calibration; refined once the device is connected.
         let initial = CalibrationData.identity
-        self.calibration = initial
 
         let (bounds, _) = DisplayResolver.bounds(forIndex: config.displayIndex)
         self.mapper = CoordinateMapper(
@@ -119,7 +117,7 @@ final class HIDTouchDriver {
         let product = IOHIDDeviceGetProperty(device, kIOHIDProductIDKey as CFString) as? Int ?? 0
         log("🔌 Connected: \"\(name)\"  VID 0x\(hex(vendor))  PID 0x\(hex(product))")
 
-        resolveCalibration(for: device)
+        applyCalibration(for: device)
     }
 
     private func deviceRemoved() {
@@ -129,30 +127,23 @@ final class HIDTouchDriver {
         logActions(engine.reset())
     }
 
-    // MARK: - Calibration Resolution
-    //
-    // Precedence: manual flags > saved file > HID descriptor.
+    // MARK: - Calibration
 
-    private func resolveCalibration(for device: IOHIDDevice) {
-        var resolved = readDescriptorRange(from: device)
+    /// Hand the descriptor range and any saved file to the controller, then put
+    /// its verdict into the mapper.
+    private func applyCalibration(for device: IOHIDDevice) {
+        let outcome = calibrationController.resolve(
+            descriptorRange: readDescriptorRange(from: device),
+            saved: CalibrationStore.shared.load()
+        )
 
-        if let saved = CalibrationStore.load(), !config.hasManualCalibration, !config.autoCalibrate {
-            resolved = saved
-            observed.seed(with: saved)
-            log("💾 Loaded calibration: \(describe(resolved))")
+        switch outcome.source {
+        case .saved:      log("💾 Loaded calibration: \(describe(outcome.calibration))")
+        case .manual:     log("📐 Manual calibration: \(describe(outcome.calibration))")
+        case .descriptor: break
         }
 
-        // Manual overrides take ultimate priority.
-        if let v = config.manualXMin { resolved.xMin = v }
-        if let v = config.manualXMax { resolved.xMax = v }
-        if let v = config.manualYMin { resolved.yMin = v }
-        if let v = config.manualYMax { resolved.yMax = v }
-        if config.hasManualCalibration {
-            log("📐 Manual calibration: \(describe(resolved))")
-        }
-
-        calibration = resolved
-        mapper.calibration = resolved
+        mapper.calibration = outcome.calibration
 
         if config.autoCalibrate {
             log("🎯 Auto-calibrate ON — learning fresh bounds; touch all four corners of the screen")
@@ -236,13 +227,9 @@ final class HIDTouchDriver {
     // MARK: - Auto-calibration
 
     private func recordForAutoCalibration(x: Double? = nil, y: Double? = nil) {
-        guard config.autoCalibrate else { return }
-        if observed.update(x: x, y: y), let snapshot = observed.snapshot() {
-            calibration = snapshot
-            mapper.calibration = snapshot
-            CalibrationStore.save(snapshot)
-            log("🎯 Auto-cal: \(describe(snapshot))")
-        }
+        guard let widened = calibrationController.record(x: x, y: y) else { return }
+        mapper.calibration = widened
+        log("🎯 Auto-cal: \(describe(widened))")
     }
 
     // MARK: - Helpers
@@ -267,41 +254,4 @@ final class HIDTouchDriver {
     private func hex(_ value: Int) -> String { String(format: "%04X", value) }
 
     private func log(_ message: String) { print(message) }
-}
-
-// MARK: - Observed Range
-
-/// Tracks the tightest min/max coordinates seen during auto-calibration.
-struct ObservedRange {
-    private var minX = Double.infinity
-    private var maxX = -Double.infinity
-    private var minY = Double.infinity
-    private var maxY = -Double.infinity
-
-    /// Seed from a previously-saved calibration so auto-cal refines rather than
-    /// starting from nothing.
-    mutating func seed(with c: CalibrationData) {
-        minX = c.xMin; maxX = c.xMax
-        minY = c.yMin; maxY = c.yMax
-    }
-
-    /// Feed a new sample. Returns `true` if the range expanded.
-    mutating func update(x: Double?, y: Double?) -> Bool {
-        var changed = false
-        if let x, x >= 0 {
-            if x < minX { minX = x; changed = true }
-            if x > maxX { maxX = x; changed = true }
-        }
-        if let y, y >= 0 {
-            if y < minY { minY = y; changed = true }
-            if y > maxY { maxY = y; changed = true }
-        }
-        return changed
-    }
-
-    /// A valid calibration, or `nil` if the range hasn't formed yet.
-    func snapshot() -> CalibrationData? {
-        guard minX < maxX, minY < maxY else { return nil }
-        return CalibrationData(xMin: minX, xMax: maxX, yMin: minY, yMax: maxY)
-    }
 }
