@@ -33,4 +33,13 @@ enum InputAction: Equatable, Sendable {
     /// Secondary click at a point.
     /// Not produced in v0.1 (spec §11).
     case rightClick(position: CGPoint)
+
+    /// Return the pointer to wherever it was before this gesture moved it.
+    ///
+    /// Touchscreen mode has to put the cursor on the target — a scroll event
+    /// has no destination of its own, and a click carries its position as a
+    /// warp. Hiding the cursor instead is not possible with public APIs and is
+    /// forbidden by spec §10 and §32, so the next best thing is to put it back
+    /// afterwards and leave the arrow where the user parked it.
+    case cursorRestore
 }

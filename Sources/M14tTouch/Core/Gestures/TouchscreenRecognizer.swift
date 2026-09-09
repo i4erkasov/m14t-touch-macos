@@ -55,7 +55,7 @@ struct TouchscreenRecognizer: GestureRecognizer {
                 // Reported at the point the finger landed, not where it left.
                 // The landing point is what the user aimed at; the release may
                 // have drifted a pixel or two.
-                return [.tap(position: origin)]
+                return finishing(with: .tap(position: origin))
             }
 
             // Time is checked before movement. If the deadline has already
@@ -92,7 +92,7 @@ struct TouchscreenRecognizer: GestureRecognizer {
                 // Ends on the last point actually emitted, so the drag path has
                 // no final micro-jump. Unlike mouse mode, where the same
                 // behaviour is an inherited quirk, here it is a choice.
-                return [.dragEnd(position: lastPosition)]
+                return finishing(with: .dragEnd(position: lastPosition))
             }
 
             // The same jitter filter mouse mode uses — a resting finger must not
@@ -106,7 +106,7 @@ struct TouchscreenRecognizer: GestureRecognizer {
         case .scrolling(let lastPosition):
             guard contact.isTouching else {
                 state = .idle
-                return []
+                return finishing(with: nil)
             }
 
             // Note what is *not* here: the long-press deadline. That is the lock.
@@ -126,12 +126,22 @@ struct TouchscreenRecognizer: GestureRecognizer {
         }
     }
 
+    /// Close out a gesture, adding the cursor restore when it is switched on.
+    ///
+    /// Always last, so the pointer goes home only after the click or release it
+    /// was moved for has actually been posted.
+    private func finishing(with action: InputAction?) -> [InputAction] {
+        var actions = action.map { [$0] } ?? []
+        if configuration.restoreCursor { actions.append(.cursorRestore) }
+        return actions
+    }
+
     mutating func reset() -> [InputAction] {
         defer { state = .idle }
         // A drag is the only state holding a button down. Without this, unplugging
         // mid-drag would strand it pressed.
         guard case .dragging(let lastPosition) = state else { return [] }
-        return [.dragEnd(position: lastPosition)]
+        return finishing(with: .dragEnd(position: lastPosition))
     }
 
     /// Straight-line distance, unlike mouse mode's per-axis comparison.

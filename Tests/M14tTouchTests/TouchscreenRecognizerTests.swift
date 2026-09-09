@@ -324,3 +324,78 @@ final class TouchscreenRecognizerTests: XCTestCase {
         XCTAssertEqual(recognizer.process(frame(100, 100, touching: false, at: 0.1)), [])
     }
 }
+
+/// Covers the cursor restore (spec §10). Touchscreen mode has to move the
+/// pointer onto the target; this puts it back afterwards, which is the closest
+/// public-API answer to "don't leave an arrow sitting on the panel".
+final class CursorRestoreTests: XCTestCase {
+
+    private func makeRecognizer(restoring: Bool) -> TouchscreenRecognizer {
+        var c = GestureConfiguration()
+        c.scrollThreshold = 10
+        c.longPressDelay = 0.4
+        c.restoreCursor = restoring
+        return TouchscreenRecognizer(configuration: c)
+    }
+
+    private func frame(_ x: CGFloat, _ y: CGFloat, touching: Bool, at time: TimeInterval) -> TouchFrame {
+        TouchFrame(contact: TouchPoint(
+            id: TouchPoint.primary,
+            position: CGPoint(x: x, y: y),
+            rawPosition: .zero,
+            isTouching: touching,
+            pressure: nil,
+            timestamp: time
+        ))
+    }
+
+    // Last, always: the pointer goes home only after the click it was moved for.
+    func testTheRestoreFollowsTheTap() {
+        var recognizer = makeRecognizer(restoring: true)
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        XCTAssertEqual(recognizer.process(frame(100, 100, touching: false, at: 0.1)),
+                       [.tap(position: CGPoint(x: 100, y: 100)), .cursorRestore])
+    }
+
+    func testTheRestoreFollowsTheDragEnd() {
+        var recognizer = makeRecognizer(restoring: true)
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0.41))
+        XCTAssertEqual(recognizer.process(frame(100, 100, touching: false, at: 0.5)),
+                       [.dragEnd(position: CGPoint(x: 100, y: 100)), .cursorRestore])
+    }
+
+    // A scroll emits nothing on release, so this is the only thing it emits.
+    func testAScrollRestoresOnRelease() {
+        var recognizer = makeRecognizer(restoring: true)
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(100, 140, touching: true, at: 0.05))
+        XCTAssertEqual(recognizer.process(frame(100, 140, touching: false, at: 0.2)), [.cursorRestore])
+    }
+
+    // Unplugging mid-drag must not strand the pointer on the panel either.
+    func testResetRestoresToo() {
+        var recognizer = makeRecognizer(restoring: true)
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0.41))
+        XCTAssertEqual(recognizer.reset(),
+                       [.dragEnd(position: CGPoint(x: 100, y: 100)), .cursorRestore])
+    }
+
+    func testNothingIsRestoredWhenTheSettingIsOff() {
+        var recognizer = makeRecognizer(restoring: false)
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        XCTAssertEqual(recognizer.process(frame(100, 100, touching: false, at: 0.1)),
+                       [.tap(position: CGPoint(x: 100, y: 100))])
+    }
+
+    // Off by default until it has been judged on the panel.
+    func testRestoringIsOffByDefaultAndTogglesFromTheCommandLine() {
+        XCTAssertFalse(GestureConfiguration().restoreCursor)
+        guard case .run(let on) = ArgumentParser.parse(["--restore-cursor"]),
+              case .run(let off) = ArgumentParser.parse(["--restore-cursor", "--no-restore-cursor"])
+        else { return XCTFail("expected run outcomes") }
+        XCTAssertTrue(on.gestures.restoreCursor)
+        XCTAssertFalse(off.gestures.restoreCursor)
+    }
+}

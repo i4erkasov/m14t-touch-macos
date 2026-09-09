@@ -14,7 +14,7 @@ struct RoutingEventEmitter: EventEmitter {
         switch action {
         case .scroll:
             scroll.emit(action)
-        case .tap, .pointerMove, .dragBegin, .dragMove, .dragEnd, .rightClick:
+        case .tap, .pointerMove, .dragBegin, .dragMove, .dragEnd, .rightClick, .cursorRestore:
             mouse.emit(action)
         }
     }

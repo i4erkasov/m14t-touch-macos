@@ -39,6 +39,18 @@ struct GestureConfiguration: Equatable {
     /// the emitted delta is derived from this and never hardcoded (spec §23).
     var naturalScroll: Bool = true
 
+    // MARK: Cursor
+
+    /// Put the pointer back where it was once a gesture finishes (spec §10).
+    ///
+    /// Touchscreen mode has to move the cursor onto the target — a scroll event
+    /// goes wherever the pointer is, and a click carries its position as a warp.
+    /// Hiding the cursor instead is not achievable with public APIs, and spec
+    /// §10 and §32 forbid the private one that would. Restoring it afterwards is
+    /// the closest thing: the arrow visits the panel for the length of a gesture
+    /// and then goes back where the user left it.
+    var restoreCursor: Bool = false
+
     // MARK: Drag
 
     /// How long a contact must be held, without committing to a scroll, before

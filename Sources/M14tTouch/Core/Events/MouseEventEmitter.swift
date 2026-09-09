@@ -8,19 +8,44 @@ import Foundation
 /// itself is delegated to `CGEventPoster`. That split matters because posting
 /// cannot be tested — a test that exercised it would really move the user's
 /// cursor.
-struct MouseEventEmitter: EventEmitter {
+final class MouseEventEmitter: EventEmitter {
 
     private let poster = CGEventPoster()
 
+    /// Where the pointer was before the current gesture moved it.
+    ///
+    /// Captured at the moment of the first move rather than when the finger
+    /// lands, because until then nothing has displaced it and there is nothing
+    /// to remember.
+    private var parkedCursor: CGPoint?
+
     func emit(_ action: InputAction) {
+        if case .cursorRestore = action {
+            restoreCursor()
+            return
+        }
+
         let events = Self.mouseEvents(for: action)
         guard !events.isEmpty else {
             reportUnsupported(action)
             return
         }
+
+        if parkedCursor == nil, let current = CGEvent(source: nil)?.location {
+            parkedCursor = current
+        }
         for event in events {
             poster.post(event.type, at: event.point)
         }
+    }
+
+    private func restoreCursor() {
+        guard let parked = parkedCursor else { return }
+        parkedCursor = nil
+        CGWarpMouseCursorPosition(parked)
+        // Without this the hardware mouse stays decoupled from the pointer and
+        // the next trackpad movement snaps it back to where the warp came from.
+        CGAssociateMouseAndMouseCursorPosition(1)
     }
 
     /// The mouse events an action maps to, in order. Empty when this emitter
@@ -46,7 +71,7 @@ struct MouseEventEmitter: EventEmitter {
         case .dragEnd(let position):    return [(.leftMouseUp, position)]
         case .tap(let position):        return [(.leftMouseDown, position), (.leftMouseUp, position)]
         case .pointerMove(let position): return [(.mouseMoved, position)]
-        case .rightClick, .scroll:      return []
+        case .rightClick, .scroll, .cursorRestore: return []
         }
     }
 

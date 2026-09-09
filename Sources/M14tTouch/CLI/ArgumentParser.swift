@@ -62,6 +62,9 @@ enum ArgumentParser {
                 }
                 config.gestures.scrollSensitivity = v
 
+            case "--restore-cursor":    config.gestures.restoreCursor = true
+            case "--no-restore-cursor": config.gestures.restoreCursor = false
+
             case "--natural-scroll":    config.gestures.naturalScroll = true
             case "--no-natural-scroll": config.gestures.naturalScroll = false
 
@@ -127,6 +130,8 @@ enum ArgumentParser {
       --natural-scroll     Content follows the finger (default)
       --no-natural-scroll  Invert the scroll direction
       --long-press MS      Hold before a contact becomes a drag (default: 400)
+      --restore-cursor     Put the pointer back where it was when a gesture ends
+      --no-restore-cursor  Leave the pointer where the gesture took it (default)
 
     GESTURE TUNING (mouse mode):
       --drag-threshold N   Jitter filter before a press becomes a drag
