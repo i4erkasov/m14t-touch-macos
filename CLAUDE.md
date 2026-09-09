@@ -53,47 +53,73 @@ way, run `./scripts/verify-env.sh` — do not "fix" it by deleting or rewriting
 tests. Full Xcode is required regardless for the SwiftUI `.app` bundle
 (spec §13) and `SMAppService` (§20).
 
-**Hardware is usually absent.** Never assume the M14t is plugged in. All core
-logic must be testable without it (spec §32) — that is the main reason
-`CoordinateMapper` is a pure value type. Behaviour that genuinely requires the
-panel must be reported as unverified, not assumed to work.
+**Do not assume the M14t is plugged in, and do not assume it is absent** — check
+with `./scripts/verify-env.sh`. All core logic must be testable without it
+(spec §32), which is why `CoordinateMapper` and the recognizers are pure value
+types. Behaviour that genuinely requires the panel must be reported as
+unverified, not assumed to work.
+
+Note that `system_profiler SPUSBDataType` returns nothing at all on macOS 26
+even with devices attached; use `ioreg` to look for hardware.
 
 **Do not guess HID usages.** If a usage is unknown, add diagnostics to capture it
 from a real device first (spec §33.7, §18).
 
-## Current architecture (pre-refactor)
+## Architecture
+
+v0.1 is complete — the pipeline spec §4 describes is in place:
 
 ```
-IOHIDManager ──▶ HIDTouchDriver ──▶ CoordinateMapper ──▶ MouseEmitter ──▶ CGEvent
-                (orchestration +
-                 touch state machine)
+IOHIDManager -> HIDTouchDriver -> TouchFrame -> GestureRecognizer -> InputAction -> EventEmitter -> CGEvent
+                (IOKit only)                   (MouseModeRecognizer)               (MouseEventEmitter)
+                                               `-- pure, no hardware needed --'
 ```
 
-| File | Responsibility |
+| Path | Responsibility |
 |---|---|
-| `main.swift` | Entry point: dispatch, permission check, run loop |
-| `ArgumentParser.swift` | Pure CLI parsing → `TouchConfig` |
-| `TouchConfig.swift` | Runtime options value type |
-| `HIDTouchDriver.swift` | IOKit orchestration + contact state + auto-calibration |
-| `CoordinateMapper.swift` | **Pure** raw→screen math (unit tested) |
-| `Calibration.swift` | `CalibrationData` + JSON store at `~/.m14ttouch.json` |
-| `DisplayResolver.swift` | `CGGetActiveDisplayList` wrapper |
-| `MouseEmitter.swift` | `CGEvent` posting |
-| `HIDUsage.swift` | Named HID usage constants |
+| `main.swift` | Composition root: dispatch, mode selection, permissions, run loop |
+| `CLI/ArgumentParser.swift` | Pure CLI parsing -> `TouchConfig` |
+| `CLI/TouchConfig.swift` | Runtime options value type |
+| `Core/TouchEngine.swift` | Pumps frames from recognizer into emitter |
+| `Core/HID/HIDTouchDriver.swift` | IOKit only: opens the device, builds frames |
+| `Core/HID/TouchPoint.swift` | `TouchPoint` + `TouchFrame` |
+| `Core/HID/HIDUsage.swift` | Named HID usage constants |
+| `Core/Display/CoordinateMapper.swift` | **Pure** raw->screen math |
+| `Core/Display/DisplayResolver.swift` | `CGGetActiveDisplayList` wrapper |
+| `Core/Calibration/Calibration.swift` | `CalibrationData` + injectable JSON store |
+| `Core/Calibration/CalibrationController.swift` | Precedence and auto-calibration |
+| `Core/Gestures/TouchMode.swift` | Mode -> recognizer factory |
+| `Core/Gestures/MouseModeRecognizer.swift` | The original touch model, as a recognizer |
+| `Core/Events/MouseEventEmitter.swift` | `InputAction` -> `CGEventType` |
+| `Core/Events/CGEventPoster.swift` | `CGEvent` posting |
 
-`HIDTouchDriver` currently does too much: it both reads HID *and* decides that
-movement means drag. Splitting that is the point of v0.1 (spec §34).
+Keep these layers separate: HID acquisition, mapping, calibration, gesture
+recognition, event emission, UI, persistence.
 
-Calibration precedence: manual CLI flags > saved `~/.m14ttouch.json` > HID descriptor.
+**Adding a gesture mode** (v0.2) means writing a `GestureRecognizer` and
+returning it from `TouchMode.makeRecognizer`. Nothing else should need to change.
 
-## Target architecture (spec §4)
+Calibration precedence: manual flags > saved `~/.m14ttouch.json` > HID descriptor.
 
-```
-HID input ──▶ TouchFrame/TouchPoint ──▶ GestureRecognizer ──▶ InputAction ──▶ EventEmitter
-```
+## Hardware facts
 
-Keep these layers separate: HID acquisition · mapping · calibration · gesture
-recognition · event emission · UI · persistence.
+Established by probing a real panel. `docs/v0.1-refactor-plan.md` records the
+behaviours the refactor preserves.
+
+- VID `0x2D1F`, PID `0x524C`, product string `Pen and multitouch sensor`.
+- **The M14t matches the driver's device filter twice** — two interfaces, both
+  `usage 0x04`, with 136 and 25 elements. Their descriptors disagree
+  (`0…12372 / 0…6960` versus `0…30931 / 0…17399`) and the panel actually reports
+  the first. Calibration is resolved per connected device, so the second
+  silently wins. Pre-existing bug, deliberately not fixed in v0.1; scheduled
+  with device identification by VID/PID (spec §18).
+- There is **no separate Pen collection**. Pen usages — `TipPressure` (0…4095),
+  `Eraser`, `Invert`, `XTilt`/`YTilt`, `BarrelSwitch` — live inside the
+  136-element touchscreen descriptor. Pen support (spec §12) needs more usages
+  from the same stream, not a second device match.
+- Values arrive as `ScanTime`, `Y`, `X`, then `TipSwitch` — contact state comes
+  *after* the coordinates, so a press maps to a fresh position.
+- Matching on usage page `0x0D` alone also catches the MacBook's own trackpad.
 
 ## Hard rules (spec §32)
 
