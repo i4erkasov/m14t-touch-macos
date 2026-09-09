@@ -12,6 +12,9 @@ final class TouchscreenRecognizerTests: XCTestCase {
         var c = GestureConfiguration()
         c.scrollThreshold = 10
         c.longPressDelay = 0.4
+        // Off here so these assertions describe the gesture itself. The restore
+        // is on by default in the product and covered by CursorRestoreTests.
+        c.restoreCursor = false
         return c
     }
 
@@ -389,13 +392,13 @@ final class CursorRestoreTests: XCTestCase {
                        [.tap(position: CGPoint(x: 100, y: 100))])
     }
 
-    // Off by default until it has been judged on the panel.
-    func testRestoringIsOffByDefaultAndTogglesFromTheCommandLine() {
-        XCTAssertFalse(GestureConfiguration().restoreCursor)
-        guard case .run(let on) = ArgumentParser.parse(["--restore-cursor"]),
-              case .run(let off) = ArgumentParser.parse(["--restore-cursor", "--no-restore-cursor"])
+    // On by default, having been judged acceptable on the panel.
+    func testRestoringIsOnByDefaultAndTogglesFromTheCommandLine() {
+        XCTAssertTrue(GestureConfiguration().restoreCursor)
+        guard case .run(let off) = ArgumentParser.parse(["--no-restore-cursor"]),
+              case .run(let on) = ArgumentParser.parse(["--no-restore-cursor", "--restore-cursor"])
         else { return XCTFail("expected run outcomes") }
-        XCTAssertTrue(on.gestures.restoreCursor)
         XCTAssertFalse(off.gestures.restoreCursor)
+        XCTAssertTrue(on.gestures.restoreCursor)
     }
 }

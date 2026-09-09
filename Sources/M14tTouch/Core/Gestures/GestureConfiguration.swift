@@ -49,7 +49,12 @@ struct GestureConfiguration: Equatable {
     /// §10 and §32 forbid the private one that would. Restoring it afterwards is
     /// the closest thing: the arrow visits the panel for the length of a gesture
     /// and then goes back where the user left it.
-    var restoreCursor: Bool = false
+    ///
+    /// On by default. Judged on the panel: the arrow is visible arriving and
+    /// leaving, which is unavoidable — the window server draws it wherever the
+    /// click put it — but the round trip reads as acceptable, and leaving an
+    /// arrow parked on a touchscreen does not.
+    var restoreCursor: Bool = true
 
     // MARK: Drag
 

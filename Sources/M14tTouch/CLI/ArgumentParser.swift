@@ -131,7 +131,8 @@ enum ArgumentParser {
       --no-natural-scroll  Invert the scroll direction
       --long-press MS      Hold before a contact becomes a drag (default: 400)
       --restore-cursor     Put the pointer back where it was when a gesture ends
-      --no-restore-cursor  Leave the pointer where the gesture took it (default)
+                           (default)
+      --no-restore-cursor  Leave the pointer where the gesture took it
 
     GESTURE TUNING (mouse mode):
       --drag-threshold N   Jitter filter before a press becomes a drag

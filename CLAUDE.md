@@ -89,15 +89,31 @@ IOHIDManager -> HIDTouchDriver -> TouchFrame -> GestureRecognizer -> InputAction
 | `Core/Calibration/Calibration.swift` | `CalibrationData` + injectable JSON store |
 | `Core/Calibration/CalibrationController.swift` | Precedence and auto-calibration |
 | `Core/Gestures/TouchMode.swift` | Mode -> recognizer factory |
+| `Core/Gestures/GestureConfiguration.swift` | Thresholds, delays, sensitivity |
 | `Core/Gestures/MouseModeRecognizer.swift` | The original touch model, as a recognizer |
-| `Core/Events/MouseEventEmitter.swift` | `InputAction` -> `CGEventType` |
+| `Core/Gestures/TouchscreenRecognizer.swift` | Tap, one-finger scroll, long-press drag |
+| `Core/Events/RoutingEventEmitter.swift` | Sends each action to the emitter that builds it |
+| `Core/Events/MouseEventEmitter.swift` | `InputAction` -> `CGEventType`, cursor parking |
+| `Core/Events/ScrollEventEmitter.swift` | Pixel-unit scroll wheel events |
 | `Core/Events/CGEventPoster.swift` | `CGEvent` posting |
 
 Keep these layers separate: HID acquisition, mapping, calibration, gesture
 recognition, event emission, UI, persistence.
 
-**Adding a gesture mode** (v0.2) means writing a `GestureRecognizer` and
-returning it from `TouchMode.makeRecognizer`. Nothing else should need to change.
+**Adding a gesture mode** means writing a `GestureRecognizer` and returning it
+from `TouchMode.makeRecognizer`. Nothing else should need to change — that is how
+touchscreen mode was added in v0.2.
+
+**Two things public APIs cannot do**, both established by measurement rather than
+assumption, and both worth knowing before promising them:
+
+- *Scroll without moving the cursor.* A scroll event has no destination; setting
+  `CGEvent.location` on one warps the pointer instead of addressing it, and
+  posting to the owning process leaves the cursor alone but scrolls nothing. So
+  the cursor is placed on the target once per gesture and restored afterwards.
+- *Hide the cursor.* `NSCursor.hide` and `CGDisplayHideCursor` act only while the
+  calling app is frontmost, which never happens here. Doing it from the
+  background needs a private API that spec §10 and §32 forbid by name.
 
 Calibration precedence: manual flags > saved `~/.m14ttouch.json` > HID descriptor.
 
