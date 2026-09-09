@@ -9,15 +9,19 @@ import Foundation
 struct GestureConfiguration: Equatable {
 
     // MARK: Tap
-
-    /// How far a contact may wander, in screen pixels, and still count as a tap
-    /// rather than the start of something else (spec §7.1).
-    var tapMovementThreshold: Double = 8
-
-    /// How long a contact may last and still count as a tap.
-    ///
-    /// A finger held longer is heading for a long press, even if it never moved.
-    var tapMaxDuration: TimeInterval = 0.3
+    //
+    // Spec §7.1 lists a tap movement threshold and a maximum tap duration.
+    // Neither is here, on purpose. A contact is a tap when it is released
+    // before anything else has claimed it, so the only boundaries that matter
+    // are the ones that claim it: `scrollThreshold` and `longPressDelay`.
+    //
+    // Separate tap limits would not add control, they would add dead zones. A
+    // tap budget of 8 px against a scroll threshold of 10 px means a touch that
+    // moves 9 px and lifts is neither a tap nor a scroll, and silently does
+    // nothing; a 300 ms tap limit against a 400 ms long press does the same to a
+    // touch held for 350 ms. Making them agree removes the gap and proves they
+    // were the same two numbers under different names. Spec §8 allows a better
+    // UX than the one it sketches.
 
     // MARK: Scroll
 

@@ -1,0 +1,165 @@
+import XCTest
+import CoreGraphics
+@testable import M14tTouch
+
+/// Covers tap recognition and the two ways a contact stops being a tap.
+///
+/// Frames are built by hand at the cadence the driver now publishes — one per
+/// report, carrying a matched coordinate pair and a monotonic timestamp.
+final class TouchscreenRecognizerTests: XCTestCase {
+
+    private var configuration: GestureConfiguration {
+        var c = GestureConfiguration()
+        c.scrollThreshold = 10
+        c.longPressDelay = 0.4
+        return c
+    }
+
+    private func makeRecognizer() -> TouchscreenRecognizer {
+        TouchscreenRecognizer(configuration: configuration)
+    }
+
+    private func frame(_ x: CGFloat, _ y: CGFloat, touching: Bool, at time: TimeInterval) -> TouchFrame {
+        TouchFrame(contact: TouchPoint(
+            id: TouchPoint.primary,
+            position: CGPoint(x: x, y: y),
+            rawPosition: CGPoint(x: x * 6, y: y * 6),
+            isTouching: touching,
+            pressure: nil,
+            timestamp: time
+        ))
+    }
+
+    // MARK: - Tap
+
+    // Nothing is emitted while the finger is down. This is the whole difference
+    // from mouse mode, and what stops the panel feeling like a giant touchpad.
+    func testContactEmitsNothingUntilItIsUnderstood() {
+        var recognizer = makeRecognizer()
+        XCTAssertEqual(recognizer.process(frame(100, 100, touching: true, at: 0)), [])
+        XCTAssertEqual(recognizer.process(frame(101, 101, touching: true, at: 0.05)), [])
+    }
+
+    func testQuickReleaseIsATap() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        XCTAssertEqual(recognizer.process(frame(100, 100, touching: false, at: 0.1)),
+                       [.tap(position: CGPoint(x: 100, y: 100))])
+    }
+
+    // The landing point is what the user aimed at; the release may have drifted.
+    func testTapIsReportedWhereTheFingerLandedNotWhereItLeft() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(104, 103, touching: true, at: 0.05))
+        XCTAssertEqual(recognizer.process(frame(104, 103, touching: false, at: 0.1)),
+                       [.tap(position: CGPoint(x: 100, y: 100))])
+    }
+
+    // A small wobble must not cost the user their click.
+    func testDriftWithinTheThresholdIsStillATap() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(106, 108, touching: true, at: 0.05))   // 10.0 px
+        XCTAssertEqual(recognizer.process(frame(106, 108, touching: false, at: 0.1)).count, 1)
+    }
+
+    // MARK: - Movement claims the contact
+
+    func testMovingPastTheScrollThresholdIsNoLongerATap() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(140, 100, touching: true, at: 0.05))
+        XCTAssertEqual(recognizer.process(frame(140, 100, touching: false, at: 0.1)), [])
+    }
+
+    // Exactly at the threshold is not past it. v0.1 showed how easily a strict
+    // comparison becomes an inclusive one.
+    func testMovementExactlyAtTheThresholdIsStillATap() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(110, 100, touching: true, at: 0.05))   // exactly 10
+        XCTAssertEqual(recognizer.process(frame(110, 100, touching: false, at: 0.1)).count, 1)
+    }
+
+    // Distance, not per-axis: 8 px on each axis is 11.3 px of travel, which is
+    // past the threshold even though neither axis alone is.
+    func testDiagonalMovementIsJudgedByDistance() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(108, 108, touching: true, at: 0.05))
+        XCTAssertEqual(recognizer.process(frame(108, 108, touching: false, at: 0.1)), [])
+    }
+
+    // Measured from where the finger landed, so wandering out and back does not
+    // restore the tap.
+    func testReturningToTheOriginDoesNotRestoreTheTap() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(200, 100, touching: true, at: 0.05))
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0.1))
+        XCTAssertEqual(recognizer.process(frame(100, 100, touching: false, at: 0.15)), [])
+    }
+
+    // MARK: - Time claims the contact
+
+    func testHoldingPastTheLongPressDelayIsNoLongerATap() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0.5))
+        XCTAssertEqual(recognizer.process(frame(100, 100, touching: false, at: 0.6)), [])
+    }
+
+    func testHoldingExactlyToTheDelayIsStillATap() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0.4))   // exactly the delay
+        XCTAssertEqual(recognizer.process(frame(100, 100, touching: false, at: 0.45)).count, 1)
+    }
+
+    // The deadline is noticed on a frame that carries no movement at all — the
+    // ScanTime tick. A held finger sends nothing else, which is why step 2
+    // publishes those frames.
+    func testTheDeadlineIsNoticedOnAMotionlessFrame() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0.41))
+        XCTAssertEqual(recognizer.process(frame(100, 100, touching: false, at: 0.42)), [])
+    }
+
+    // MARK: - Sequencing
+
+    func testASecondTapIsRecognisedAfterTheFirst() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(100, 100, touching: false, at: 0.1))
+        _ = recognizer.process(frame(500, 500, touching: true, at: 1.0))
+        XCTAssertEqual(recognizer.process(frame(500, 500, touching: false, at: 1.1)),
+                       [.tap(position: CGPoint(x: 500, y: 500))])
+    }
+
+    // An abandoned gesture must release its claim, or the next touch inherits it.
+    func testATapWorksAfterAnAbandonedGesture() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(400, 400, touching: true, at: 0.05))   // becomes not-a-tap
+        _ = recognizer.process(frame(400, 400, touching: false, at: 0.1))
+        _ = recognizer.process(frame(700, 700, touching: true, at: 1.0))
+        XCTAssertEqual(recognizer.process(frame(700, 700, touching: false, at: 1.1)).count, 1)
+    }
+
+    // Nothing is held down, so there is nothing to release on unplug.
+    func testResetEmitsNothing() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        XCTAssertEqual(recognizer.reset(), [])
+    }
+
+    func testResetAbandonsTheGestureInProgress() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.reset()
+        // The release belongs to a gesture that no longer exists.
+        XCTAssertEqual(recognizer.process(frame(100, 100, touching: false, at: 0.1)), [])
+    }
+}

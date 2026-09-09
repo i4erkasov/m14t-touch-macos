@@ -50,18 +50,6 @@ enum ArgumentParser {
             // Gesture tuning. Durations are given in milliseconds because that
             // is how the spec talks about them (§8: longPressDelay = 400 ms)
             // and how anyone tuning them thinks; they are stored in seconds.
-            case "--tap-threshold":
-                guard let v = nextDouble(), v >= 0 else {
-                    return .error("--tap-threshold requires a non-negative number of pixels")
-                }
-                config.gestures.tapMovementThreshold = v
-
-            case "--tap-duration":
-                guard let v = nextDouble(), v >= 0 else {
-                    return .error("--tap-duration requires a non-negative number of milliseconds")
-                }
-                config.gestures.tapMaxDuration = v / 1000
-
             case "--scroll-threshold":
                 guard let v = nextDouble(), v >= 0 else {
                     return .error("--scroll-threshold requires a non-negative number of pixels")
@@ -131,9 +119,8 @@ enum ArgumentParser {
       --debug              Print every HID event and resulting action
 
     GESTURE TUNING (touchscreen mode, arriving in v0.2):
-      --tap-threshold N    Movement allowed during a tap, in pixels (default: 8)
-      --tap-duration MS    Longest a tap may last (default: 300)
-      --scroll-threshold N Movement that commits to scrolling (default: 10)
+      --scroll-threshold N Movement that commits to scrolling, in pixels, and
+                           so also the furthest a tap may wander (default: 10)
       --scroll-sensitivity N
                            Multiplier for scroll deltas (default: 1.0)
       --natural-scroll     Content follows the finger (default)
