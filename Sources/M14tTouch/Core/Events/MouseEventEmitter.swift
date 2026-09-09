@@ -5,12 +5,12 @@ import Foundation
 ///
 /// Deliberately split in two: `mouseEvent(for:)` is a pure function deciding
 /// *which* event an action corresponds to, and is unit tested; the posting
-/// itself is delegated to `MouseEmitter`. That split matters because posting
+/// itself is delegated to `CGEventPoster`. That split matters because posting
 /// cannot be tested — a test that exercised it would really move the user's
 /// cursor.
 struct MouseEventEmitter: EventEmitter {
 
-    private let poster = MouseEmitter()
+    private let poster = CGEventPoster()
 
     func emit(_ action: InputAction) {
         guard let event = Self.mouseEvent(for: action) else {

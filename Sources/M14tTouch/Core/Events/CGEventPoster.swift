@@ -3,10 +3,11 @@ import Foundation
 
 /// Posts synthetic mouse events into macOS.
 ///
-/// Wrapping `CGEvent` here keeps the driver's touch logic free of CoreGraphics
-/// boilerplate and gives a single, obvious place where system events originate —
-/// which matters because posting these requires Accessibility permission.
-struct MouseEmitter {
+/// The bottom of the stack: the single, obvious place where system events
+/// originate — which matters because posting these requires Accessibility
+/// permission. It knows how to post an event, never which one to post; that is
+/// `MouseEventEmitter`'s decision.
+struct CGEventPoster {
 
     /// Emit a left-button event (down, up, or drag) at a screen point.
     func post(_ type: CGEventType, at point: CGPoint) {
