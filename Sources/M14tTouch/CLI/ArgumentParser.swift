@@ -37,6 +37,16 @@ enum ArgumentParser {
                 }
                 config.displayIndex = idx
 
+            case "--mode":
+                guard let raw = iterator.next() else {
+                    return .error("--mode requires a value")
+                }
+                guard let mode = TouchMode(rawValue: raw) else {
+                    let known = TouchMode.allCases.map(\.rawValue).joined(separator: ", ")
+                    return .error("Unknown mode '\(raw)' — expected one of: \(known)")
+                }
+                config.mode = mode
+
             case "--invert-x":      config.invertX = true
             case "--invert-y":      config.invertY = true
             case "--debug":         config.debugMode = true
@@ -64,6 +74,9 @@ enum ArgumentParser {
       m14ttouch [OPTIONS]
 
     OPTIONS:
+      --mode MODE          Touch behaviour: mouse (default).
+                           touchscreen — tap, scroll, long-press drag — is not
+                           implemented yet; it arrives in v0.2
       --display N          Display index the M14t is mapped to (default: 1)
       --auto-calibrate     Learn the touch range as you touch all four corners,
                            then save it for future runs

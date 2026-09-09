@@ -79,9 +79,23 @@ case .error(let message):
 case .run(let config):
     print(banner)
     printDisplays()
+
+    // Resolve the mode before asking for permission: no point prompting for
+    // Accessibility only to bail out on an unavailable mode.
+    guard let recognizer = config.mode.makeRecognizer(config: config) else {
+        fputs("""
+        ❌ '\(config.mode.rawValue)' mode is not implemented yet — it arrives in v0.2.
+           Run with --mode mouse.
+
+        """, stderr)
+        exit(1)
+    }
+    print("🎛️  Mode: \(config.mode.rawValue)")
+
     ensureAccessibilityOrExit(prompt: config.promptForAccessibility)
 
-    let driver = HIDTouchDriver(config: config)
+    let engine = TouchEngine(recognizer: recognizer, emitter: MouseEventEmitter())
+    let driver = HIDTouchDriver(config: config, engine: engine)
     driver.start()
 
     // All work happens in IOKit callbacks scheduled on this run loop.

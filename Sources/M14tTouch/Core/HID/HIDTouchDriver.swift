@@ -35,17 +35,12 @@ final class HIDTouchDriver {
     private var currentRawY: Double = 0
     private var isTipSwitchDown = false
 
-    init(config: TouchConfig) {
+    /// - Parameter engine: the gesture pipeline to feed. Injected rather than
+    ///   built here so the driver has no opinion on which mode is active — that
+    ///   is chosen once, in `main.swift`, from `--mode`.
+    init(config: TouchConfig, engine: TouchEngine) {
         self.config = config
-
-        // Mouse mode is the only recognizer in v0.1. Step 7 replaces this with a
-        // factory driven by `--mode`, at which point touchscreen mode plugs in
-        // here and nothing else changes.
-        self.engine = TouchEngine(
-            recognizer: MouseModeRecognizer(dragThreshold: config.dragThreshold),
-            emitter: MouseEventEmitter()
-        )
-
+        self.engine = engine
         self.calibrationController = CalibrationController(config: config)
 
         // Provisional calibration; refined once the device is connected.

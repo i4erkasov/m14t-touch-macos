@@ -7,6 +7,9 @@ import Foundation
 /// hidden state.
 struct TouchConfig {
 
+    /// Which gesture model interprets the touch stream.
+    var mode: TouchMode = .mouse
+
     /// Index of the display the M14t is mapped to (`0` is the main display).
     var displayIndex: Int = 1
 

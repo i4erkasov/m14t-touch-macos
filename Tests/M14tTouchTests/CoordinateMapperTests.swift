@@ -99,6 +99,37 @@ final class ArgumentParserTests: XCTestCase {
         XCTAssertFalse(config.promptForAccessibility)
     }
 
+    func testModeDefaultsToMouse() {
+        guard case .run(let config) = ArgumentParser.parse([]) else {
+            return XCTFail("expected a run outcome")
+        }
+        XCTAssertEqual(config.mode, .mouse)
+    }
+
+    func testModeIsParsed() {
+        guard case .run(let config) = ArgumentParser.parse(["--mode", "touchscreen"]) else {
+            return XCTFail("expected a run outcome")
+        }
+        XCTAssertEqual(config.mode, .touchscreen)
+    }
+
+    // Parsing accepts an unimplemented mode; availability is decided in one
+    // place, TouchMode.makeRecognizer, so the two cannot drift apart.
+    func testUnknownModeIsAnErrorNamingTheValidOnes() {
+        guard case .error(let message) = ArgumentParser.parse(["--mode", "wiggle"]) else {
+            return XCTFail("expected an error outcome")
+        }
+        XCTAssertTrue(message.contains("wiggle"))
+        XCTAssertTrue(message.contains("mouse"))
+        XCTAssertTrue(message.contains("touchscreen"))
+    }
+
+    func testModeWithoutAValueIsAnError() {
+        guard case .error = ArgumentParser.parse(["--mode"]) else {
+            return XCTFail("expected an error outcome")
+        }
+    }
+
     func testHelpRecognized() {
         guard case .help = ArgumentParser.parse(["--help"]) else {
             return XCTFail("expected .help")
