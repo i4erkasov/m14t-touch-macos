@@ -80,21 +80,17 @@ case .run(let config):
     print(banner)
     printDisplays()
 
-    // Resolve the mode before asking for permission: no point prompting for
-    // Accessibility only to bail out on an unavailable mode.
-    guard let recognizer = config.mode.makeRecognizer(config: config) else {
-        fputs("""
-        ❌ '\(config.mode.rawValue)' mode is not implemented yet — it arrives in v0.2.
-           Run with --mode mouse.
-
-        """, stderr)
-        exit(1)
-    }
     print("🎛️  Mode: \(config.mode.rawValue)")
 
     ensureAccessibilityOrExit(prompt: config.promptForAccessibility)
 
-    let engine = TouchEngine(recognizer: recognizer, emitter: MouseEventEmitter())
+    let engine = TouchEngine(
+        recognizer: config.mode.makeRecognizer(config: config),
+        emitter: RoutingEventEmitter(
+            mouse: MouseEventEmitter(),
+            scroll: ScrollEventEmitter()
+        )
+    )
     let driver = HIDTouchDriver(config: config, engine: engine)
 
     // Held for the lifetime of the process: the signal sources stop firing when

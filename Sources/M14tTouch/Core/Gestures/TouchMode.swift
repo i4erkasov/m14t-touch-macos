@@ -13,20 +13,19 @@ enum TouchMode: String, CaseIterable {
     case mouse
 
     /// Tap to click, one-finger scroll, long press to drag (spec §7–8).
-    /// Not implemented yet.
     case touchscreen
 
-    /// Build the recognizer for this mode, or `nil` if it does not exist yet.
+    /// Build the recognizer for this mode.
     ///
-    /// Deliberately the single place that knows what is implemented, so the
-    /// "not yet" answer cannot drift out of step with reality: a mode that
-    /// returns a recognizer is available, and one that returns `nil` is not.
-    func makeRecognizer(config: TouchConfig) -> (any GestureRecognizer)? {
+    /// The extension point: a new gesture model is a new case here and a type
+    /// implementing `GestureRecognizer`. The driver, the engine, the emitters
+    /// and the CLI need no changes.
+    func makeRecognizer(config: TouchConfig) -> any GestureRecognizer {
         switch self {
         case .mouse:
             return MouseModeRecognizer(dragThreshold: config.gestures.dragThreshold)
         case .touchscreen:
-            return nil
+            return TouchscreenRecognizer(configuration: config.gestures)
         }
     }
 }

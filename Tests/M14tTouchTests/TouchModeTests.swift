@@ -17,9 +17,15 @@ final class TouchModeTests: XCTestCase {
         XCTAssertEqual(recognizer?.dragThreshold, 9)
     }
 
-    // Should fail the moment v0.2 implements it — at which point this test is
-    // replaced rather than deleted, and main.swift's guard becomes dead code.
-    func testTouchscreenModeIsNotAvailableYet() {
-        XCTAssertNil(TouchMode.touchscreen.makeRecognizer(config: TouchConfig()))
+    func testTouchscreenModeProducesTheTouchscreenRecognizer() {
+        let recognizer = TouchMode.touchscreen.makeRecognizer(config: TouchConfig())
+        XCTAssertTrue(recognizer is TouchscreenRecognizer)
+    }
+
+    func testTheTouchscreenRecognizerTakesTheGestureConfiguration() {
+        var config = TouchConfig()
+        config.gestures.longPressDelay = 0.9
+        let recognizer = TouchMode.touchscreen.makeRecognizer(config: config) as? TouchscreenRecognizer
+        XCTAssertEqual(recognizer?.configuration.longPressDelay, 0.9)
     }
 }

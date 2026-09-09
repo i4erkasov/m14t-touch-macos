@@ -104,9 +104,10 @@ enum ArgumentParser {
       m14ttouch [OPTIONS]
 
     OPTIONS:
-      --mode MODE          Touch behaviour: mouse (default).
-                           touchscreen — tap, scroll, long-press drag — is not
-                           implemented yet; it arrives in v0.2
+      --mode MODE          Touch behaviour (default: mouse)
+                             mouse       finger drags the pointer
+                             touchscreen tap to click, swipe to scroll,
+                                         long press to drag
       --display N          Display index the M14t is mapped to (default: 1)
       --auto-calibrate     Learn the touch range as you touch all four corners,
                            then save it for future runs
@@ -118,7 +119,7 @@ enum ArgumentParser {
       --y-max N            Manual raw Y maximum
       --debug              Print every HID event and resulting action
 
-    GESTURE TUNING (touchscreen mode, arriving in v0.2):
+    GESTURE TUNING (touchscreen mode):
       --scroll-threshold N Movement that commits to scrolling, in pixels, and
                            so also the furthest a tap may wander (default: 10)
       --scroll-sensitivity N
