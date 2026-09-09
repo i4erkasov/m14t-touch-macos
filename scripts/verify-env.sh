@@ -79,10 +79,21 @@ fi
 
 head_ "Hardware (informational — not required to build)"
 
-if system_profiler SPUSBDataType 2>/dev/null | grep -qiE 'thinkvision|m14t'; then
-    ok "M14t appears on the USB bus"
+# Probed through ioreg, not system_profiler: `system_profiler SPUSBDataType`
+# returns nothing at all on macOS 26 even with devices attached, which reported
+# a connected M14t as missing. ioreg is also closer to what the driver sees —
+# it matches on HID usage page 0x0D (digitizer), usage 0x04 (touch screen).
+DIGITIZERS=$(ioreg -c IOHIDDevice -r -d1 2>/dev/null | grep -c '"PrimaryUsagePage" = 13')
+
+if [ "${DIGITIZERS:-0}" -gt 0 ]; then
+    ok "HID digitizer interfaces present: $DIGITIZERS"
+    ioreg -p IOUSB -w0 2>/dev/null \
+        | grep -iE 'multitouch|thinkvision|m14t|digitizer' \
+        | sed 's/^[^+]*+-o /      /; s/ *<class.*//' \
+        | head -3
 else
-    warn "M14t not detected on USB — hardware-dependent behaviour cannot be verified"
+    warn "no HID digitizer found — hardware-dependent behaviour cannot be verified"
+    printf '      Check the USB-C cable carries data, not just power.\n'
 fi
 
 printf '\n  Displays:\n'
