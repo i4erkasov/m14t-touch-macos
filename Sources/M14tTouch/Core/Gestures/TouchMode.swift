@@ -24,7 +24,7 @@ enum TouchMode: String, CaseIterable {
     func makeRecognizer(config: TouchConfig) -> (any GestureRecognizer)? {
         switch self {
         case .mouse:
-            return MouseModeRecognizer(dragThreshold: config.dragThreshold)
+            return MouseModeRecognizer(dragThreshold: config.gestures.dragThreshold)
         case .touchscreen:
             return nil
         }

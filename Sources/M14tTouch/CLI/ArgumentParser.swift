@@ -47,6 +47,48 @@ enum ArgumentParser {
                 }
                 config.mode = mode
 
+            // Gesture tuning. Durations are given in milliseconds because that
+            // is how the spec talks about them (§8: longPressDelay = 400 ms)
+            // and how anyone tuning them thinks; they are stored in seconds.
+            case "--tap-threshold":
+                guard let v = nextDouble(), v >= 0 else {
+                    return .error("--tap-threshold requires a non-negative number of pixels")
+                }
+                config.gestures.tapMovementThreshold = v
+
+            case "--tap-duration":
+                guard let v = nextDouble(), v >= 0 else {
+                    return .error("--tap-duration requires a non-negative number of milliseconds")
+                }
+                config.gestures.tapMaxDuration = v / 1000
+
+            case "--scroll-threshold":
+                guard let v = nextDouble(), v >= 0 else {
+                    return .error("--scroll-threshold requires a non-negative number of pixels")
+                }
+                config.gestures.scrollThreshold = v
+
+            case "--scroll-sensitivity":
+                guard let v = nextDouble(), v > 0 else {
+                    return .error("--scroll-sensitivity requires a positive number")
+                }
+                config.gestures.scrollSensitivity = v
+
+            case "--natural-scroll":    config.gestures.naturalScroll = true
+            case "--no-natural-scroll": config.gestures.naturalScroll = false
+
+            case "--long-press":
+                guard let v = nextDouble(), v >= 0 else {
+                    return .error("--long-press requires a non-negative number of milliseconds")
+                }
+                config.gestures.longPressDelay = v / 1000
+
+            case "--drag-threshold":
+                guard let v = nextDouble(), v >= 0 else {
+                    return .error("--drag-threshold requires a non-negative number of pixels")
+                }
+                config.gestures.dragThreshold = v
+
             case "--invert-x":      config.invertX = true
             case "--invert-y":      config.invertY = true
             case "--debug":         config.debugMode = true
@@ -87,6 +129,20 @@ enum ArgumentParser {
       --y-min N            Manual raw Y minimum
       --y-max N            Manual raw Y maximum
       --debug              Print every HID event and resulting action
+
+    GESTURE TUNING (touchscreen mode, arriving in v0.2):
+      --tap-threshold N    Movement allowed during a tap, in pixels (default: 8)
+      --tap-duration MS    Longest a tap may last (default: 300)
+      --scroll-threshold N Movement that commits to scrolling (default: 10)
+      --scroll-sensitivity N
+                           Multiplier for scroll deltas (default: 1.0)
+      --natural-scroll     Content follows the finger (default)
+      --no-natural-scroll  Invert the scroll direction
+      --long-press MS      Hold before a contact becomes a drag (default: 400)
+
+    GESTURE TUNING (mouse mode):
+      --drag-threshold N   Jitter filter before a press becomes a drag
+                           (default: 1.5 pixels)
       --no-accessibility-prompt
                Do not show the Accessibility prompt; useful for LaunchAgents
       --list               List connected displays and exit

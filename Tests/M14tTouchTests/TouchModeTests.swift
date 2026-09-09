@@ -12,7 +12,7 @@ final class TouchModeTests: XCTestCase {
 
     func testTheRecognizerTakesItsThresholdFromTheConfig() {
         var config = TouchConfig()
-        config.dragThreshold = 9
+        config.gestures.dragThreshold = 9
         let recognizer = TouchMode.mouse.makeRecognizer(config: config) as? MouseModeRecognizer
         XCTAssertEqual(recognizer?.dragThreshold, 9)
     }

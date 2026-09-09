@@ -25,10 +25,9 @@ struct TouchConfig {
     /// Ask macOS to show the Accessibility permission prompt when access is missing.
     var promptForAccessibility: Bool = true
 
-    /// Minimum movement, in screen pixels, before a finger-down is treated as a
-    /// drag rather than a stationary press. Filters out jitter so a tap stays a
-    /// clean click.
-    var dragThreshold: Double = 1.5
+    /// How gestures are interpreted. Grouped so the recognizers take one value
+    /// rather than a growing list of loose numbers.
+    var gestures = GestureConfiguration()
 
     /// When `true`, the driver widens its coordinate range as it observes touch
     /// values, then persists the result. Touch all four corners once to calibrate.
