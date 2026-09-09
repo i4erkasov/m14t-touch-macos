@@ -19,5 +19,13 @@ enum HID {
     enum Digitizer: UInt32 {
         case tipSwitch = 0x42   // finger touching the surface (1) or lifted (0)
         case touchScreen = 0x04 // device-level usage identifying a touch screen
+
+        /// A counter the panel advances while a contact exists — on this device
+        /// by 100 every ~10 ms, so a ~100 Hz tick.
+        ///
+        /// Used as a report boundary and as a heartbeat, never as a clock: the
+        /// descriptor caps it at 65535, which at 100 µs per unit wraps every 6.5
+        /// seconds. Durations are measured from a monotonic system timestamp.
+        case scanTime = 0x56
     }
 }

@@ -91,20 +91,53 @@ final class TouchEngineTests: XCTestCase {
         ])
     }
 
-    /// Each axis arrives as its own value, so a frame carries a new X against
-    /// the previous Y. Both frames cross the threshold here, so both drag —
-    /// which is what the pre-refactor driver did, one `emitDragIfMoved` per axis.
-    func testEachAxisValueDragsIndependently() {
+    /// One drag per frame that moves — the recognizer's rule, independent of how
+    /// often the driver publishes.
+    ///
+    /// Since v0.2 the driver batches a report into a single frame, so a diagonal
+    /// movement now arrives as one frame carrying both axes and produces one
+    /// drag. Before batching the same movement arrived as two frames, the first
+    /// carrying a new X against the previous Y, and produced two drags through
+    /// an intermediate point that the finger never visited.
+    func testAMatchedCoordinatePairProducesOneDrag() {
         let (engine, emitter) = makeMousePipeline()
-        engine.process(frame(100, 100, touching: true))   // TipSwitch 1
-        engine.process(frame(200, 100, touching: true))   // X moves
-        engine.process(frame(200, 300, touching: true))   // Y moves
+        engine.process(frame(100, 100, touching: true))   // contact
+        engine.process(frame(200, 300, touching: true))   // one report, both axes
+
+        XCTAssertEqual(emitter.actions, [
+            .dragBegin(position: CGPoint(x: 100, y: 100)),
+            .dragMove(position: CGPoint(x: 200, y: 300)),
+        ])
+    }
+
+    /// The unbatched cadence still has to work: a panel that does not mark
+    /// report boundaries falls back to a frame per value, and the recognizer
+    /// must behave sensibly there too — each frame that moves far enough drags.
+    func testUnbatchedFramesEachDragSeparately() {
+        let (engine, emitter) = makeMousePipeline()
+        engine.process(frame(100, 100, touching: true))
+        engine.process(frame(200, 100, touching: true))   // X only
+        engine.process(frame(200, 300, touching: true))   // then Y
 
         XCTAssertEqual(emitter.actions, [
             .dragBegin(position: CGPoint(x: 100, y: 100)),
             .dragMove(position: CGPoint(x: 200, y: 100)),
             .dragMove(position: CGPoint(x: 200, y: 300)),
         ])
+    }
+
+    /// A held finger sends only ScanTime, so the driver publishes frames that
+    /// repeat the last position. They must stay silent in mouse mode — the tick
+    /// exists for the v0.2 long-press deadline, not to generate events.
+    func testRepeatedFramesAtTheSamePositionEmitNothing() {
+        let (engine, emitter) = makeMousePipeline()
+        engine.process(frame(100, 100, touching: true))
+        emitter.reset()
+
+        for _ in 0..<10 {
+            engine.process(frame(100, 100, touching: true))
+        }
+        XCTAssertEqual(emitter.actions, [])
     }
 
     /// A TipSwitch repeated at an unchanged position must stay silent.

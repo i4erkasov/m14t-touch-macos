@@ -11,11 +11,19 @@ import Foundation
 /// file's business (spec §32).
 ///
 /// ## Frame cadence
-/// One frame is produced per HID value, not per report. The device reports X, Y
-/// and TipSwitch as separate values, so a frame can carry a new X against the
-/// previous Y. That is exactly what the pre-refactor driver did, and it is
-/// preserved so this refactor cannot be the cause of a behaviour change;
-/// report-level batching is a v0.2 decision (docs/v0.1-refactor-plan.md).
+/// One frame per report, so X and Y in a frame always belong together.
+///
+/// IOKit delivers values one at a time with no end-of-report marker, but this
+/// panel opens every report with `ScanTime`, so its arrival means the previous
+/// report is complete. Coordinates therefore accumulate and are published when
+/// the next report starts — about 10 ms later, one tick at the panel's ~100 Hz.
+///
+/// Contact changes do not wait. A release arrives at the end of a report and the
+/// next `ScanTime` only comes with the *next touch*, which on real traces was
+/// 1.6 seconds later; batching the release would delay it by that long.
+///
+/// A device that reports no `ScanTime` falls back to a frame per value, which is
+/// what v0.1 did throughout.
 final class HIDTouchDriver {
 
     private var config: TouchConfig
@@ -37,6 +45,10 @@ final class HIDTouchDriver {
 
     /// The device calibration was taken from, once one has actually sent input.
     private var calibratedDevice: IOHIDDevice?
+
+    /// Whether this panel marks report boundaries with `ScanTime`. Until one
+    /// arrives the driver cannot batch, so it publishes per value instead.
+    private var reportsScanTime = false
 
     /// - Parameter engine: the gesture pipeline to feed. Injected rather than
     ///   built here so the driver has no opinion on which mode is active — that
@@ -217,15 +229,23 @@ final class HIDTouchDriver {
         case (HID.Page.genericDesktop.rawValue, HID.GenericDesktop.x.rawValue):
             currentRawX = Double(intVal)
             recordForAutoCalibration(x: Double(intVal))
-            emitFrame()
+            emitFrameIfUnbatched()
 
         case (HID.Page.genericDesktop.rawValue, HID.GenericDesktop.y.rawValue):
             currentRawY = Double(intVal)
             recordForAutoCalibration(y: Double(intVal))
-            emitFrame()
+            emitFrameIfUnbatched()
 
         case (HID.Page.digitizer.rawValue, HID.Digitizer.tipSwitch.rawValue):
+            // Contact changes are urgent — see the note on frame cadence.
             isTipSwitchDown = intVal != 0
+            emitFrame()
+
+        case (HID.Page.digitizer.rawValue, HID.Digitizer.scanTime.rawValue):
+            // Opens a report, so the previous one is now complete. Published
+            // even when nothing moved: a held finger sends nothing else, and
+            // gesture recognition needs the tick to notice time passing.
+            reportsScanTime = true
             emitFrame()
 
         default:
@@ -233,12 +253,19 @@ final class HIDTouchDriver {
         }
     }
 
+    /// Publish a coordinate change only on panels that do not mark report
+    /// boundaries. Where they do, the value waits for the boundary so X and Y
+    /// are published as a matched pair.
+    private func emitFrameIfUnbatched() {
+        guard !reportsScanTime else { return }
+        emitFrame()
+    }
+
     /// Publish the current sample as a frame.
     ///
-    /// Called after every X, Y and TipSwitch value, so the mapping always uses
-    /// the calibration in force at that moment — `recordForAutoCalibration` runs
-    /// first, and a sample that widens the range is mapped with the widened one,
-    /// as before.
+    /// The mapping always uses the calibration in force at that moment —
+    /// `recordForAutoCalibration` runs first, so a sample that widens the range
+    /// is mapped with the widened one.
     private func emitFrame() {
         let contact = TouchPoint(
             id: TouchPoint.primary,
