@@ -70,6 +70,7 @@ final class TouchscreenRecognizerTests: XCTestCase {
         var recognizer = makeRecognizer()
         _ = recognizer.process(frame(100, 100, touching: true, at: 0))
         _ = recognizer.process(frame(140, 100, touching: true, at: 0.05))
+        // The release ends the scroll; no click is produced.
         XCTAssertEqual(recognizer.process(frame(140, 100, touching: false, at: 0.1)), [])
     }
 
@@ -87,8 +88,9 @@ final class TouchscreenRecognizerTests: XCTestCase {
     func testDiagonalMovementIsJudgedByDistance() {
         var recognizer = makeRecognizer()
         _ = recognizer.process(frame(100, 100, touching: true, at: 0))
-        _ = recognizer.process(frame(108, 108, touching: true, at: 0.05))
-        XCTAssertEqual(recognizer.process(frame(108, 108, touching: false, at: 0.1)), [])
+        // Neither axis alone exceeds 10, but the travel is 11.3.
+        XCTAssertEqual(recognizer.process(frame(108, 108, touching: true, at: 0.05)),
+                       [.pointerMove(position: CGPoint(x: 100, y: 100))])
     }
 
     // Measured from where the finger landed, so wandering out and back does not
@@ -183,12 +185,20 @@ final class TouchscreenRecognizerTests: XCTestCase {
 
     // Moving away before the deadline is a scroll in the making, never a drag,
     // however long the finger stays down afterwards.
-    func testMovingAwayBeforeTheDeadlineNeverBecomesADrag() {
+    // The gesture lock. A slow scroll must not become a drag partway through,
+    // however long the finger stays down.
+    func testAScrollNeverBecomesADragHoweverLongItLasts() {
         var recognizer = makeRecognizer()
         _ = recognizer.process(frame(100, 100, touching: true, at: 0))
-        _ = recognizer.process(frame(400, 400, touching: true, at: 0.05))
+        _ = recognizer.process(frame(400, 400, touching: true, at: 0.05))   // commits to scroll
+
+        // Well past longPressDelay, and motionless — the deadline is not consulted.
         XCTAssertEqual(recognizer.process(frame(400, 400, touching: true, at: 2.0)), [])
-        XCTAssertEqual(recognizer.process(frame(400, 400, touching: false, at: 2.1)), [])
+        // Further movement keeps scrolling rather than dragging.
+        let actions = recognizer.process(frame(400, 500, touching: true, at: 2.1))
+        XCTAssertEqual(actions, [.scroll(deltaX: 0, deltaY: 100)])
+        // And the release produces no dragEnd.
+        XCTAssertEqual(recognizer.process(frame(400, 500, touching: false, at: 2.2)), [])
     }
 
     // Unplugging mid-drag has to release the button; nothing else will.
@@ -210,6 +220,73 @@ final class TouchscreenRecognizerTests: XCTestCase {
                        [.tap(position: CGPoint(x: 700, y: 700))])
     }
 
+    // MARK: - Scrolling
+
+    // The cursor is placed once, at the start. A scroll event has no
+    // destination of its own — it goes wherever the cursor is.
+    func testCommittingToAScrollPlacesTheCursorAndScrollsNothingYet() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        XCTAssertEqual(recognizer.process(frame(100, 140, touching: true, at: 0.05)),
+                       [.pointerMove(position: CGPoint(x: 100, y: 100))])
+    }
+
+    // Deltas are measured from where the commitment happened, so the threshold
+    // distance is consumed by committing rather than scrolling the page by it.
+    func testScrollDeltasAreMeasuredFromTheCommitmentPoint() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(100, 140, touching: true, at: 0.05))
+        XCTAssertEqual(recognizer.process(frame(100, 190, touching: true, at: 0.1)),
+                       [.scroll(deltaX: 0, deltaY: 50)])
+    }
+
+    func testEachFrameScrollsByItsOwnDelta() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(100, 140, touching: true, at: 0.05))
+        _ = recognizer.process(frame(100, 190, touching: true, at: 0.1))
+        XCTAssertEqual(recognizer.process(frame(120, 200, touching: true, at: 0.15)),
+                       [.scroll(deltaX: 20, deltaY: 10)])
+    }
+
+    func testAMotionlessFrameDuringAScrollEmitsNothing() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(100, 140, touching: true, at: 0.05))
+        XCTAssertEqual(recognizer.process(frame(100, 140, touching: true, at: 0.1)), [])
+    }
+
+    func testSensitivityScalesTheDelta() {
+        var configuration = self.configuration
+        configuration.scrollSensitivity = 2.5
+        var recognizer = TouchscreenRecognizer(configuration: configuration)
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(100, 140, touching: true, at: 0.05))
+        XCTAssertEqual(recognizer.process(frame(100, 160, touching: true, at: 0.1)),
+                       [.scroll(deltaX: 0, deltaY: 50)])
+    }
+
+    // Natural scrolling is the default — content follows the finger. Turning it
+    // off inverts the gesture, and must invert both axes.
+    func testTurningOffNaturalScrollingInvertsBothAxes() {
+        var configuration = self.configuration
+        configuration.naturalScroll = false
+        var recognizer = TouchscreenRecognizer(configuration: configuration)
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(100, 140, touching: true, at: 0.05))
+        XCTAssertEqual(recognizer.process(frame(130, 160, touching: true, at: 0.1)),
+                       [.scroll(deltaX: -30, deltaY: -20)])
+    }
+
+    // Nothing is held down during a scroll, so an unplug has nothing to release.
+    func testResetDuringAScrollEmitsNothing() {
+        var recognizer = makeRecognizer()
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(100, 140, touching: true, at: 0.05))
+        XCTAssertEqual(recognizer.reset(), [])
+    }
+
     // MARK: - Sequencing
 
     func testASecondTapIsRecognisedAfterTheFirst() {
@@ -222,13 +299,14 @@ final class TouchscreenRecognizerTests: XCTestCase {
     }
 
     // An abandoned gesture must release its claim, or the next touch inherits it.
-    func testATapWorksAfterAnAbandonedGesture() {
+    func testATapWorksAfterAScroll() {
         var recognizer = makeRecognizer()
         _ = recognizer.process(frame(100, 100, touching: true, at: 0))
-        _ = recognizer.process(frame(400, 400, touching: true, at: 0.05))   // becomes not-a-tap
+        _ = recognizer.process(frame(400, 400, touching: true, at: 0.05))
         _ = recognizer.process(frame(400, 400, touching: false, at: 0.1))
         _ = recognizer.process(frame(700, 700, touching: true, at: 1.0))
-        XCTAssertEqual(recognizer.process(frame(700, 700, touching: false, at: 1.1)).count, 1)
+        XCTAssertEqual(recognizer.process(frame(700, 700, touching: false, at: 1.1)),
+                       [.tap(position: CGPoint(x: 700, y: 700))])
     }
 
     // Nothing is held down, so there is nothing to release on unplug.

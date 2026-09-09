@@ -4,9 +4,12 @@ import Foundation
 /// Reads the panel as a touchscreen rather than a large absolute touchpad
 /// (spec §7, §22, §35).
 ///
-/// This version recognises taps and long-press drags. Moving far enough still
-/// ends the gesture without doing anything; that becomes scrolling in v0.2
-/// step 5.
+/// Recognises taps, one-finger scrolling and long-press drags (spec §7–8).
+///
+/// The gesture lock is the load-bearing rule: once a contact has committed to
+/// scrolling it stays scrolling until release, and the long-press deadline is
+/// never consulted again. Without it a slow scroll turns into a drag partway
+/// through and starts selecting text.
 struct TouchscreenRecognizer: GestureRecognizer {
 
     let configuration: GestureConfiguration
@@ -23,9 +26,9 @@ struct TouchscreenRecognizer: GestureRecognizer {
         /// which makes it impossible to consult a stale one while idle.
         case dragging(lastPosition: CGPoint)
 
-        /// The contact moved too far to be a tap. Becomes `scrolling` in step 5;
-        /// until then the gesture simply ends.
-        case abandoned
+        /// Committed to scrolling. Carries the point the last delta was
+        /// measured from.
+        case scrolling(lastPosition: CGPoint)
     }
 
     private var state: State = .idle
@@ -69,8 +72,16 @@ struct TouchscreenRecognizer: GestureRecognizer {
             }
 
             if distance(from: origin, to: contact.position) > configuration.scrollThreshold {
-                state = .abandoned      // → scrolling, step 5
-                return []
+                // Measured from where the finger is now, so the movement that
+                // committed to the scroll is consumed by the commitment rather
+                // than scrolling the page by the threshold distance.
+                state = .scrolling(lastPosition: contact.position)
+
+                // A scroll event carries no destination — it goes wherever the
+                // cursor is. So the cursor has to be put on the target once, at
+                // the start; it is not moved again for the rest of the gesture.
+                // See the cursor policy in docs/v0.2-touchscreen-plan.md.
+                return [.pointerMove(position: origin)]
             }
 
             return []
@@ -92,9 +103,26 @@ struct TouchscreenRecognizer: GestureRecognizer {
             state = .dragging(lastPosition: contact.position)
             return [.dragMove(position: contact.position)]
 
-        case .abandoned:
-            if !contact.isTouching { state = .idle }
-            return []
+        case .scrolling(let lastPosition):
+            guard contact.isTouching else {
+                state = .idle
+                return []
+            }
+
+            // Note what is *not* here: the long-press deadline. That is the lock.
+            let deltaX = contact.position.x - lastPosition.x
+            let deltaY = contact.position.y - lastPosition.y
+            guard deltaX != 0 || deltaY != 0 else { return [] }
+
+            state = .scrolling(lastPosition: contact.position)
+
+            // Deltas describe how the finger moved, scaled by sensitivity and
+            // flipped when natural scrolling is off. Turning that into the sign
+            // a CGEvent wants is the emitter's business — spec §23 requires the
+            // wheel direction be established on the device, not assumed here.
+            let sign = configuration.naturalScroll ? 1.0 : -1.0
+            let scale = configuration.scrollSensitivity * sign
+            return [.scroll(deltaX: deltaX * scale, deltaY: deltaY * scale)]
         }
     }
 
