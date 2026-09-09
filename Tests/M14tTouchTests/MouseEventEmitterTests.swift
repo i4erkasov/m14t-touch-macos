@@ -9,35 +9,46 @@ final class MouseEventEmitterTests: XCTestCase {
 
     private let point = CGPoint(x: 640, y: 480)
 
-    // The drag triad is the whole of v0.1 — it reproduces the original driver's
-    // touch model, so these three assertions are the behaviour contract.
+    private func types(for action: InputAction) -> [CGEventType] {
+        MouseEventEmitter.mouseEvents(for: action).map(\.type)
+    }
+
+    // The drag triad reproduces the original driver's touch model, so these
+    // three assertions are the behaviour contract mouse mode has to keep.
     func testDragBeginIsAPress() {
-        let event = MouseEventEmitter.mouseEvent(for: .dragBegin(position: point))
-        XCTAssertEqual(event?.type, .leftMouseDown)
-        XCTAssertEqual(event?.point, point)
+        let events = MouseEventEmitter.mouseEvents(for: .dragBegin(position: point))
+        XCTAssertEqual(events.map(\.type), [.leftMouseDown])
+        XCTAssertEqual(events.first?.point, point)
     }
 
     func testDragMoveIsADrag() {
-        let event = MouseEventEmitter.mouseEvent(for: .dragMove(position: point))
-        XCTAssertEqual(event?.type, .leftMouseDragged)
-        XCTAssertEqual(event?.point, point)
+        XCTAssertEqual(types(for: .dragMove(position: point)), [.leftMouseDragged])
     }
 
     func testDragEndIsARelease() {
-        let event = MouseEventEmitter.mouseEvent(for: .dragEnd(position: point))
-        XCTAssertEqual(event?.type, .leftMouseUp)
-        XCTAssertEqual(event?.point, point)
+        XCTAssertEqual(types(for: .dragEnd(position: point)), [.leftMouseUp])
     }
 
-    // Unhandled on purpose, not by omission: scroll belongs to a future
-    // ScrollEventEmitter (spec §23), and the rest wait on the v0.2 cursor
-    // policy decision (spec §10). If v0.2 implements one of these, the
-    // corresponding assertion here should fail and be replaced.
-    func testActionsNotYetImplementedAreNotMapped() {
-        XCTAssertNil(MouseEventEmitter.mouseEvent(for: .tap(position: point)))
-        XCTAssertNil(MouseEventEmitter.mouseEvent(for: .pointerMove(position: point)))
-        XCTAssertNil(MouseEventEmitter.mouseEvent(for: .rightClick(position: point)))
-        XCTAssertNil(MouseEventEmitter.mouseEvent(for: .scroll(deltaX: 1, deltaY: 2)))
+    // A tap is press and release at one point, emitted back to back: in
+    // touchscreen mode a tap is only known to be one once the finger has left,
+    // so there is no moment at which a button could be held.
+    func testTapIsAPressAndReleaseAtOnePoint() {
+        let events = MouseEventEmitter.mouseEvents(for: .tap(position: point))
+        XCTAssertEqual(events.map(\.type), [.leftMouseDown, .leftMouseUp])
+        XCTAssertEqual(events.map(\.point), [point, point])
+    }
+
+    // Placing the cursor before a scroll, which has no destination of its own.
+    // A move event rather than a warp, so applications update hover state.
+    func testPointerMoveIsAMouseMove() {
+        XCTAssertEqual(types(for: .pointerMove(position: point)), [.mouseMoved])
+    }
+
+    // Unhandled on purpose: scroll belongs to ScrollEventEmitter and is routed
+    // there, and rightClick waits for two-finger gestures (spec §11).
+    func testScrollAndRightClickAreNotThisEmittersBusiness() {
+        XCTAssertTrue(MouseEventEmitter.mouseEvents(for: .scroll(deltaX: 1, deltaY: 2)).isEmpty)
+        XCTAssertTrue(MouseEventEmitter.mouseEvents(for: .rightClick(position: point)).isEmpty)
     }
 
     func testRecordingEmitterKeepsActionsInOrder() {
