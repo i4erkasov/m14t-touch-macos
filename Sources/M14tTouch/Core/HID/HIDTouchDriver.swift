@@ -102,6 +102,21 @@ final class HIDTouchDriver {
         }
     }
 
+    /// Release any contact in progress and close the device.
+    ///
+    /// Quitting while a finger is down would otherwise leave the left button
+    /// pressed: the release is normally emitted when the finger lifts or the
+    /// device disappears, and process termination is neither.
+    func stop() {
+        isTipSwitchDown = false
+        logActions(engine.reset())
+
+        guard let manager else { return }
+        IOHIDManagerUnscheduleFromRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
+        IOHIDManagerClose(manager, IOOptionBits(kIOHIDOptionsTypeNone))
+        self.manager = nil
+    }
+
     /// Recover `self` from the opaque pointer passed to C callbacks.
     private static func from(_ ctx: UnsafeMutableRawPointer?) -> HIDTouchDriver {
         Unmanaged<HIDTouchDriver>.fromOpaque(ctx!).takeUnretainedValue()

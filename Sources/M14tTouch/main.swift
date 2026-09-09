@@ -96,6 +96,16 @@ case .run(let config):
 
     let engine = TouchEngine(recognizer: recognizer, emitter: MouseEventEmitter())
     let driver = HIDTouchDriver(config: config, engine: engine)
+
+    // Held for the lifetime of the process: the signal sources stop firing when
+    // they are deallocated.
+    let shutdownHandler = ShutdownHandler {
+        print("\n👋 Stopping — releasing any held contact.")
+        driver.stop()
+        exit(0)
+    }
+    _ = shutdownHandler
+
     driver.start()
 
     // All work happens in IOKit callbacks scheduled on this run loop.
