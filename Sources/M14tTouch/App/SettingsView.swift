@@ -121,6 +121,19 @@ private struct GeneralSettings: View {
                      : "Which screen your touches land on. Only external displays shaped like the touch surface are listed.")
             }
 
+            if model.canOpenAtLogin {
+                Section {
+                    Toggle("Open at login", isOn: $model.opensAtLogin)
+                    if model.loginNeedsApproval {
+                        Button("Approve in Login Items…") { LoginItem.openLoginItemsSettings() }
+                    }
+                } footer: {
+                    Text(model.loginNeedsApproval
+                         ? "macOS is holding this until you approve it."
+                         : "Touch works only while this app is running.")
+                }
+            }
+
             Section {
                 ForEach(Permission.allCases, id: \.self) { permission in
                     LabeledContent(permission.title) {

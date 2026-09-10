@@ -33,6 +33,28 @@ final class SettingsModel: ObservableObject {
     /// grants them in another application, so nothing tells us when it changes.
     @Published private(set) var permissions: [Permission: Bool] = [:]
 
+    /// Whether the app opens at login. Read from the system rather than stored
+    /// with the other settings: the system is where it actually lives, and a
+    /// copy of ours could disagree after someone edits Login Items.
+    @Published var opensAtLogin: Bool = false {
+        didSet {
+            guard !isReadingLoginState, opensAtLogin != oldValue else { return }
+            if !LoginItem.setEnabled(opensAtLogin) {
+                // Refused. Show what is true rather than what was asked for.
+                isReadingLoginState = true
+                opensAtLogin = oldValue
+                isReadingLoginState = false
+            }
+        }
+    }
+
+    /// Guards the observer while the published value is being brought in line
+    /// with the system, so reading the state is not mistaken for changing it.
+    private var isReadingLoginState = false
+
+    var canOpenAtLogin: Bool { LoginItem.isAvailable }
+    var loginNeedsApproval: Bool { LoginItem.needsApproval }
+
     private let store: SettingsStore
     private let apply: (AppSettings) -> Void
     private let calibrationStore: CalibrationStore
@@ -63,6 +85,9 @@ final class SettingsModel: ObservableObject {
         permissions = Dictionary(
             uniqueKeysWithValues: Permission.allCases.map { ($0, PermissionsManager.isGranted($0)) }
         )
+        isReadingLoginState = true
+        opensAtLogin = LoginItem.isEnabled
+        isReadingLoginState = false
     }
 
     /// The displays worth offering as a touch target.
