@@ -104,6 +104,20 @@ final class HIDTouchDriver {
     /// nothing here notices. Read on the touch queue and written from the main
     /// thread, so it is set through the queue rather than assigned directly.
     private var penPointer: PenPointerDisplay?
+    /// What the panel is reporting right now, published for the diagnostics
+    /// pane while it is being looked at and not otherwise.
+    ///
+    /// Delivered on the main queue, throttled: the panel reports faster than
+    /// anyone can read, and a view updated per value would cost more than the
+    /// translation it is there to inspect.
+    var onLiveInput: ((LiveInput) -> Void)?
+
+    private var live = LiveInput()
+    private var isMonitoring = false
+    private var liveLastPublished = DispatchTime.now()
+    private var liveWindowStart = DispatchTime.now()
+    private var liveValueCount = 0
+
     private let penPressure = PressureScale.m14t
 
     private var penRawX: Double = 0
@@ -275,6 +289,46 @@ final class HIDTouchDriver {
         log(config.penEnabled
             ? "✅ Listening — device held exclusively, so the pen is ours"
             : "✅ Listening for touch device…")
+    }
+
+    /// Start or stop publishing live input, from any thread.
+    ///
+    /// Off unless something is watching: the counting is cheap but not free,
+    /// and a diagnostics view nobody has opened should cost nothing at all.
+    func setLiveMonitoring(_ enabled: Bool) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.isMonitoring = enabled
+            self.liveValueCount = 0
+            self.liveWindowStart = DispatchTime.now()
+            if !enabled { self.live = LiveInput() }
+        }
+    }
+
+    /// Note that a value arrived, and publish if enough time has passed.
+    private func noteLiveValue() {
+        guard isMonitoring else { return }
+        liveValueCount += 1
+
+        let now = DispatchTime.now()
+        func seconds(since earlier: DispatchTime) -> Double {
+            Double(now.uptimeNanoseconds &- earlier.uptimeNanoseconds) / 1_000_000_000
+        }
+
+        let window = seconds(since: liveWindowStart)
+        if window >= 1 {
+            live.valuesPerSecond = Int(Double(liveValueCount) / window)
+            liveValueCount = 0
+            liveWindowStart = now
+        }
+
+        guard seconds(since: liveLastPublished) >= 0.05 else { return }
+        liveLastPublished = now
+
+        let snapshot = live
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated { self?.onLiveInput?(snapshot) }
+        }
     }
 
     /// Attach the pointer the pen draws for itself, from any thread.
@@ -498,6 +552,8 @@ final class HIDTouchDriver {
             break
         }
 
+        defer { noteLiveValue() }
+        live.source = .finger
         calibrateIfNeeded(from: IOHIDElementGetDevice(element))
 
         let page    = IOHIDElementGetUsagePage(element)
@@ -512,13 +568,25 @@ final class HIDTouchDriver {
 
         case (HID.Page.genericDesktop.rawValue, HID.GenericDesktop.x.rawValue):
             currentRawX = Double(intVal)
+            live.rawX = currentRawX
+            live.screen = mapper.map(rawX: currentRawX, rawY: currentRawY)
             recordForAutoCalibration(x: Double(intVal))
             emitFrameIfUnbatched()
 
         case (HID.Page.genericDesktop.rawValue, HID.GenericDesktop.y.rawValue):
             currentRawY = Double(intVal)
+            live.rawY = currentRawY
+            live.screen = mapper.map(rawX: currentRawX, rawY: currentRawY)
             recordForAutoCalibration(y: Double(intVal))
             emitFrameIfUnbatched()
+
+        // Declared by the descriptor; whether this panel ever fills them in is
+        // the open question about multi-touch, and this is what answers it.
+        case (HID.Page.digitizer.rawValue, HID.Digitizer.contactCount.rawValue):
+            live.contactCount = Int(intVal)
+
+        case (HID.Page.digitizer.rawValue, HID.Digitizer.contactCountMaximum.rawValue):
+            live.contactCountMaximum = Int(intVal)
 
         case (HID.Page.digitizer.rawValue, HID.Digitizer.tipSwitch.rawValue):
             let down = intVal != 0
@@ -540,6 +608,7 @@ final class HIDTouchDriver {
 
             // Contact changes are urgent — see the note on frame cadence.
             isTipSwitchDown = down
+            live.isTouching = down
             emitFrame()
 
         case (HID.Page.digitizer.rawValue, HID.Digitizer.scanTime.rawValue):
@@ -596,6 +665,17 @@ final class HIDTouchDriver {
         default:
             return                       // nothing else changes the pen's state
         }
+
+        live.source = .pen
+        live.rawX = penRawX
+        live.rawY = penRawY
+        live.screen = penMapper.map(rawX: penRawX, rawY: penRawY)
+        live.isTouching = penTipDown || penEraserDown
+        live.penInRange = penInRange
+        live.penButtons = penButtons
+        live.rawPressure = penPressureRaw
+        live.pressure = penPressure.normalize(penPressureRaw)
+        noteLiveValue()
 
         publishPenSample()
     }

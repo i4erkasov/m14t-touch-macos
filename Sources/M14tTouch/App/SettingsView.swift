@@ -440,11 +440,89 @@ private struct DiagnosticsSettings: View {
             }
 
             Section {
+                LabeledContent("Reporting", value: live.activity)
+                LabeledContent("Source", value: live.sourceName)
+                LabeledContent("Contact", value: live.contactDescription)
+                LabeledContent("Panel coordinates", value: live.rawDescription)
+                LabeledContent("On screen", value: live.screenDescription)
+                LabeledContent("Pressure", value: live.pressureDescription)
+                LabeledContent("Pen buttons", value: live.buttonDescription)
+            } header: {
+                Text("Live input")
+            } footer: {
+                Text("What the panel is reporting as you touch it. Panel coordinates are before calibration — the numbers to quote when a touch lands in the wrong place. \(live.contactCountNote)")
+            }
+
+            Section {
                 Button("Copy report") { model.copyDiagnostics() }
             } footer: {
                 Text("Copies the above, for pasting into a bug report.")
             }
         }
         .formStyle(.grouped)
+        // Only while someone is looking: the driver counts nothing and
+        // publishes nothing until this pane is on screen.
+        .onAppear { model.setLiveMonitoring?(true) }
+        .onDisappear { model.setLiveMonitoring?(false) }
+    }
+
+    private var live: LiveInput { model.live }
+}
+
+/// How the live snapshot reads in the pane.
+///
+/// On the value rather than in the view because every one of these is a
+/// judgement about absence — "not reported" and "nothing" are different
+/// answers, and the difference is the whole point of a diagnostics pane.
+extension LiveInput {
+
+    var activity: String {
+        valuesPerSecond > 0 ? "\(valuesPerSecond) values/s" : "nothing arriving"
+    }
+
+    var sourceName: String {
+        switch source {
+        case .pen:    return penInRange ? "Pen, in range" : "Pen"
+        case .finger: return "Finger"
+        case .other:  return "Other"
+        case nil:     return "—"
+        }
+    }
+
+    var contactDescription: String {
+        let touch = isTouching ? "touching" : "not touching"
+        guard let contactCount else { return touch }
+        let maximum = contactCountMaximum.map { " of \($0)" } ?? ""
+        return "\(touch), \(contactCount)\(maximum)"
+    }
+
+    var rawDescription: String {
+        guard let rawX, let rawY else { return "—" }
+        return "\(Int(rawX)), \(Int(rawY))"
+    }
+
+    var screenDescription: String {
+        guard let screen else { return "—" }
+        return "\(Int(screen.x)), \(Int(screen.y))"
+    }
+
+    var pressureDescription: String {
+        guard let rawPressure, let pressure else { return "—" }
+        return String(format: "%d raw, %.2f scaled", Int(rawPressure), pressure)
+    }
+
+    var buttonDescription: String {
+        var held: [String] = []
+        if penButtons.contains(.barrel) { held.append("far") }
+        if penButtons.contains(.eraserMode) { held.append("near") }
+        return held.isEmpty ? "none held" : held.joined(separator: ", ")
+    }
+
+    /// Says what the absence of a contact count means, rather than leaving a
+    /// dash to be interpreted.
+    var contactCountNote: String {
+        contactCount == nil
+            ? "This panel has not reported a contact count; if it never does with two fingers down, it does not report multi-touch."
+            : ""
     }
 }

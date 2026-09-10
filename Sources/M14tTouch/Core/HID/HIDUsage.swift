@@ -26,6 +26,9 @@ enum HID {
         /// Used as a report boundary and as a heartbeat, never as a clock: the
         /// descriptor caps it at 65535, which at 100 µs per unit wraps every 6.5
         /// seconds. Durations are measured from a monotonic system timestamp.
+        case contactIdentifier = 0x51
+        case contactCount = 0x54
+        case contactCountMaximum = 0x55
         case scanTime = 0x56
 
         // Collection usages, used to tell the pen's elements from the finger's.

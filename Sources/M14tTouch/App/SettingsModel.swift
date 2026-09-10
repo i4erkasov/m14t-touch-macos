@@ -63,6 +63,14 @@ final class SettingsModel: ObservableObject {
     /// the command-line build has no overlay to show.
     var startCalibration: (() -> Void)?
 
+    /// Turn the driver's live reporting on and off. Set by the controller,
+    /// which owns the driver.
+    var setLiveMonitoring: ((Bool) -> Void)?
+
+    /// What the panel is reporting right now, while the diagnostics pane is
+    /// open. Empty otherwise, because nothing is asked for otherwise.
+    @Published var live = LiveInput()
+
     init(
         settings: AppSettings,
         status: DriverStatus,
