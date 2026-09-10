@@ -15,6 +15,16 @@ struct DisplayIdentity: Equatable, Codable {
     /// three together, and two identical models with no serial are genuinely
     /// indistinguishable this way.
     var isUsable: Bool { vendor != 0 || model != 0 || serial != 0 }
+
+    /// How this display is named in stored calibration.
+    ///
+    /// Displays that identify themselves get a key of their own; the ones that
+    /// cannot share a single bucket, which is honest — nothing distinguishes
+    /// them, so nothing should pretend to.
+    var storageKey: String {
+        guard isUsable else { return "unidentified" }
+        return String(format: "%04X-%04X-%08X", vendor, model, serial)
+    }
 }
 
 /// Which display the panel is mapped to.

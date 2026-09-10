@@ -12,7 +12,7 @@ final class CalibrationControllerTests: XCTestCase {
 
     private func makeController(
         _ configure: (inout TouchConfig) -> Void = { _ in },
-        persist: @escaping (CalibrationData) -> Void = { _ in }
+        persist: @escaping (CalibrationData, DisplayIdentity?) -> Void = { _, _ in }
     ) -> CalibrationController {
         var config = TouchConfig()
         configure(&config)
@@ -72,7 +72,9 @@ final class CalibrationControllerTests: XCTestCase {
 
     func testRecordingWidensTheRangeAndPersistsIt() {
         var persisted: [CalibrationData] = []
-        let controller = makeController({ $0.autoCalibrate = true }, persist: { persisted.append($0) })
+        let controller = makeController({ $0.autoCalibrate = true }, persist: { calibration, _ in
+            persisted.append(calibration)
+        })
 
         _ = controller.record(x: 100)
         _ = controller.record(y: 200)

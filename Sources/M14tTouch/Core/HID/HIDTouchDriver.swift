@@ -113,6 +113,9 @@ final class HIDTouchDriver {
         }
         let display = resolution.display
         mapper.displayBounds = display.bounds
+        // Calibration belongs to a panel, so it is looked up and saved against
+        // the display we are actually aiming at.
+        calibrationController.displayIdentity = display.identity
 
         switch resolution.match {
         case .identity:    break
@@ -279,7 +282,7 @@ final class HIDTouchDriver {
     private func applyCalibration(for device: IOHIDDevice) {
         let outcome = calibrationController.resolve(
             descriptorRange: readDescriptorRange(from: device),
-            saved: CalibrationStore.shared.load()
+            saved: CalibrationStore.shared.load(for: calibrationController.displayIdentity)
         )
 
         switch outcome.source {

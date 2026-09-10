@@ -54,7 +54,7 @@ final class SettingsModel: ObservableObject {
     /// Re-read what the world looks like right now.
     func refresh() {
         displays = DisplayResolver.all()
-        calibration = calibrationStore.load()
+        calibration = calibrationStore.load(for: selectedDisplayIdentity)
         permissions = Dictionary(
             uniqueKeysWithValues: Permission.allCases.map { ($0, PermissionsManager.isGranted($0)) }
         )
@@ -75,8 +75,17 @@ final class SettingsModel: ObservableObject {
     }
 
     func resetCalibration() {
-        calibrationStore.reset()
+        calibrationStore.reset(for: selectedDisplayIdentity)
         calibration = nil
+    }
+
+    /// The identity of the display currently selected, if it has one.
+    ///
+    /// Calibration is shown and reset for the display the panel is mapped to,
+    /// not globally: with entries kept per display, a reset that wiped every one
+    /// of them would be a surprise.
+    private var selectedDisplayIdentity: DisplayIdentity? {
+        DisplayResolver.resolve(settings.display, among: displays)?.display.identity
     }
 
     /// Choose a display, remembering it by identity where it has one so it is

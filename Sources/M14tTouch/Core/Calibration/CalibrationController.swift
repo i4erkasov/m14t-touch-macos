@@ -22,17 +22,26 @@ final class CalibrationController {
     }
 
     private let config: TouchConfig
-    private let persist: (CalibrationData) -> Void
+    private let persist: (CalibrationData, DisplayIdentity?) -> Void
+
+    /// Which display's calibration is being handled. Set once the target display
+    /// is resolved, so auto-calibration is saved against the right panel.
+    var displayIdentity: DisplayIdentity?
     private var observed = ObservedRange()
 
     /// The calibration currently in force.
     private(set) var calibration: CalibrationData = .identity
 
-    /// - Parameter persist: where a widened range is written. Injected so tests
-    ///   do not write to the real `~/.m14ttouch.json`.
+    /// - Parameter persist: where a widened range is written, and for which
+    ///   display. Injected so tests do not write to the real
+    ///   `~/.m14ttouch.json`. The identity is a parameter rather than something
+    ///   the closure captures, because it is only known once the display has
+    ///   been resolved — after this runs.
     init(
         config: TouchConfig,
-        persist: @escaping (CalibrationData) -> Void = { CalibrationStore.shared.save($0) }
+        persist: @escaping (CalibrationData, DisplayIdentity?) -> Void = {
+            CalibrationStore.shared.save($0, for: $1)
+        }
     ) {
         self.config = config
         self.persist = persist
@@ -83,7 +92,7 @@ final class CalibrationController {
         guard observed.update(x: x, y: y), let snapshot = observed.snapshot() else { return nil }
 
         calibration = snapshot
-        persist(snapshot)
+        persist(snapshot, displayIdentity)
         return snapshot
     }
 }
