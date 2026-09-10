@@ -81,6 +81,17 @@ final class HIDTouchDriver {
     /// arrives the driver cannot batch, so it publishes per value instead.
     private var reportsScanTime = false
 
+    /// While set, frames go here **instead of** the gesture engine.
+    ///
+    /// A diversion rather than a fork. Calibration needs to see touches without
+    /// them turning into clicks — a finger on a target would otherwise press the
+    /// overlay showing it — and letting the engine see them as well would leave
+    /// it holding a gesture whose end it never gets.
+    ///
+    /// Delivered on the **main queue**, because the only thing that wants frames
+    /// this way is an interface.
+    private var frameObserver: ((TouchFrame) -> Void)?
+
     /// - Parameter engine: the gesture pipeline to feed. Injected rather than
     ///   built here so the driver has no opinion on which mode is active — that
     ///   is chosen once, in `main.swift`, from `--mode`.
@@ -184,6 +195,24 @@ final class HIDTouchDriver {
             self.config.mode = mode
             self.engine.setRecognizer(mode.makeRecognizer(config: self.config))
             self.log("🎛️  Mode: \(mode.rawValue)")
+        }
+    }
+
+    /// Divert frames away from the gesture engine, from any thread.
+    ///
+    /// Setting an observer abandons whatever gesture is in progress, so a finger
+    /// that was down when calibration started does not leave a button held with
+    /// nothing left to release it.
+    ///
+    /// - Parameter observer: called on the main queue for every frame, or `nil`
+    ///   to hand frames back to the engine.
+    func setFrameObserver(_ observer: ((TouchFrame) -> Void)?) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            if observer != nil, self.frameObserver == nil {
+                self.logActions(self.engine.reset())
+            }
+            self.frameObserver = observer
         }
     }
 
@@ -384,7 +413,13 @@ final class HIDTouchDriver {
             pressure: nil,
             timestamp: ProcessInfo.processInfo.systemUptime
         )
-        logActions(engine.process(TouchFrame(contact: contact)))
+        let frame = TouchFrame(contact: contact)
+
+        if let frameObserver {
+            DispatchQueue.main.async { frameObserver(frame) }
+            return
+        }
+        logActions(engine.process(frame))
     }
 
     // MARK: - Auto-calibration

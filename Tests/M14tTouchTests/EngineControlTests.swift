@@ -80,6 +80,34 @@ final class EngineControlTests: XCTestCase {
         XCTAssertEqual(emitter.actions, [])
     }
 
+    // MARK: - Diversion
+
+    // The property calibration depends on: while frames are being observed, the
+    // engine sees none of them, so a finger on a target cannot click the overlay
+    // showing it. The driver enforces this — these two cover the engine side of
+    // the contract it relies on.
+    func testDisablingIsWhatMakesTheDiversionSafe() {
+        let (engine, emitter) = makePipeline()
+        engine.process(frame(100, 100, touching: true))
+        emitter.reset()
+
+        // What the driver does when an observer is installed mid-gesture.
+        engine.reset()
+        XCTAssertEqual(emitter.actions, [.dragEnd(position: CGPoint(x: 100, y: 100))])
+    }
+
+    func testTheEngineResumesCleanlyAfterADiversion() {
+        let (engine, emitter) = makePipeline()
+        engine.process(frame(100, 100, touching: true))
+        engine.reset()
+        emitter.reset()
+
+        // Frames handed back after calibration start a fresh gesture rather than
+        // continuing the one that was abandoned.
+        engine.process(frame(700, 700, touching: true))
+        XCTAssertEqual(emitter.actions, [.dragBegin(position: CGPoint(x: 700, y: 700))])
+    }
+
     // MARK: - Mode
 
     func testSwitchingModeReleasesWhatTheOldOneHeld() {
