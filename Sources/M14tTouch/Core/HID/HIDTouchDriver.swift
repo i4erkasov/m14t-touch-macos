@@ -112,6 +112,13 @@ final class HIDTouchDriver {
     /// translation it is there to inspect.
     var onLiveInput: ((LiveInput) -> Void)?
 
+    /// Whether the device has said anything at all since the driver started.
+    ///
+    /// Logged once, because "the panel does nothing until you touch it" and
+    /// "the panel is talking and we are ignoring it" look identical from the
+    /// outside and have nothing in common as problems.
+    private var hasLoggedFirstValue = false
+
     private var live = LiveInput()
     private var isMonitoring = false
     private var liveLastPublished = DispatchTime.now()
@@ -285,6 +292,7 @@ final class HIDTouchDriver {
             self?.manager = nil
             self?.log("🔌 HID manager closed")
         }
+        hasLoggedFirstValue = false
         IOHIDManagerActivate(manager)
         log(config.penEnabled
             ? "✅ Listening — device held exclusively, so the pen is ours"
@@ -539,6 +547,14 @@ final class HIDTouchDriver {
 
     private func handle(_ value: IOHIDValue) {
         let element = IOHIDValueGetElement(value)
+
+        if !hasLoggedFirstValue {
+            hasLoggedFirstValue = true
+            let page = IOHIDElementGetUsagePage(element)
+            let usage = IOHIDElementGetUsage(element)
+            log("📥 First value since start: \(source(of: element)) "
+                + "page=0x\(hex(Int(page))) usage=0x\(hex(Int(usage)))")
+        }
 
         // Pen and finger are two collections of one device, so which pipeline a
         // value belongs to is decided here and nowhere else (pen spec §4).
