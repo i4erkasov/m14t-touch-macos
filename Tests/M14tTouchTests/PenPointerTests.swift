@@ -62,6 +62,55 @@ final class PenPointerTests: XCTestCase {
         XCTAssertEqual(restored.farButton, .middleClick)
     }
 
+    // MARK: - Colour
+
+    func testTheRingIsSystemGreenUntilChanged() {
+        XCTAssertEqual(PenConfiguration().pointerColor, .systemGreen)
+    }
+
+    func testAColourSurvivesASaveAndLoad() throws {
+        var configuration = PenConfiguration()
+        configuration.pointerColor = RGBAColor(red: 0.25, green: 0.5, blue: 0.75, alpha: 0.5)
+
+        let data = try JSONEncoder().encode(configuration)
+        let restored = try JSONDecoder().decode(PenConfiguration.self, from: data)
+
+        XCTAssertEqual(restored.pointerColor, configuration.pointerColor)
+    }
+
+    // Settings written before the colour existed keep everything they had, and
+    // gain the default rather than black — the failure a plain `Double` default
+    // of zero would have produced.
+    func testAColourMissingFromTheFileBecomesTheDefault() throws {
+        let json = Data(#"{"pointer":"dot","pointerSize":20}"#.utf8)
+        let restored = try JSONDecoder().decode(PenConfiguration.self, from: json)
+
+        XCTAssertEqual(restored.pointerColor, .systemGreen)
+        XCTAssertEqual(restored.pointer, .dot)
+        XCTAssertEqual(restored.pointerSize, 20)
+    }
+
+    // A half-written colour must not turn the missing channels into black
+    // either, which is what decoding straight into `Double` would do.
+    func testAPartialColourFillsTheRestFromTheDefault() throws {
+        let json = Data(#"{"pointerColor":{"red":1.0}}"#.utf8)
+        let restored = try JSONDecoder().decode(PenConfiguration.self, from: json)
+
+        XCTAssertEqual(restored.pointerColor.red, 1.0)
+        XCTAssertEqual(restored.pointerColor.green, RGBAColor.systemGreen.green)
+        XCTAssertEqual(restored.pointerColor.blue, RGBAColor.systemGreen.blue)
+        XCTAssertEqual(restored.pointerColor.alpha, 1.0)
+    }
+
+    // The default is macOS's own green, read from the system rather than
+    // invented, so it is worth pinning that it still looks green.
+    func testTheDefaultIsRecognisablyGreen() {
+        let green = RGBAColor.systemGreen
+        XCTAssertGreaterThan(green.green, green.red)
+        XCTAssertGreaterThan(green.green, green.blue)
+        XCTAssertEqual(green.alpha, 1)
+    }
+
     func testBothStylesAreOfferedAndNamed() {
         XCTAssertEqual(PenPointerStyle.allCases.count, 2)
         for style in PenPointerStyle.allCases {

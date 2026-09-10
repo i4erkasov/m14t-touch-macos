@@ -267,6 +267,17 @@ private struct PenSettings: View {
 
     private var pen: Binding<PenConfiguration> { $model.settings.pen }
 
+    /// The stored colour as the colour well wants it.
+    ///
+    /// A bridge rather than a stored `Color`, because a preferences file cannot
+    /// hold one — see `RGBAColor`.
+    private var ringColor: Binding<Color> {
+        Binding(
+            get: { model.settings.pen.pointerColor.color },
+            set: { model.settings.pen.pointerColor = RGBAColor($0, fallback: model.settings.pen.pointerColor) }
+        )
+    }
+
     var body: some View {
         Form {
             Section {
@@ -310,6 +321,7 @@ private struct PenSettings: View {
                         ForEach(PenPointerStyle.allCases, id: \.self) { Text($0.title).tag($0) }
                     }
                     if model.settings.pen.pointer == .dot {
+                        ColorPicker("Ring colour", selection: ringColor, supportsOpacity: false)
                         LabeledContent("Size") {
                             Slider(value: pen.pointerSize, in: 6...32, step: 1) {
                                 Text("Size")
@@ -325,7 +337,7 @@ private struct PenSettings: View {
                     Text("Pointer")
                 } footer: {
                     Text(model.settings.pen.pointer == .dot
-                         ? "The dot is drawn over everything and the system arrow is hidden while the pen is near. Hiding the arrow needs the same facility as Touch → Cursor; where that is unavailable, both are visible."
+                         ? "The dot is drawn over everything and the system arrow is hidden while the pen is near. Its middle stays dark so it can be seen on a pale window; the ring carries the colour. Hiding the arrow needs the same facility as Touch → Cursor; where that is unavailable, both are visible."
                          : "The pointer macOS would show anyway.")
                 }
 

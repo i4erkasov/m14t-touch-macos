@@ -66,6 +66,14 @@ struct PenConfiguration: Equatable, Codable {
     /// How big the drawn dot is, in points.
     var pointerSize: Double = 14
 
+    /// The colour of the ring around the drawn dot.
+    ///
+    /// The ring rather than the middle: the dot's core stays dark so it can be
+    /// seen against a pale window, and the ring carries the colour and the
+    /// contrast against a dark one. Colouring the core instead would make the
+    /// pointer disappear over anything of a similar shade.
+    var pointerColor: RGBAColor = .systemGreen
+
     /// Ignore finger touches while the pen is near the panel (pen spec §15).
     ///
     /// A hand resting on the screen to write with is the case this exists for.
@@ -103,6 +111,7 @@ struct PenConfiguration: Equatable, Codable {
         palmRejection = value(.palmRejection, fallback.palmRejection)
         pointer = value(.pointer, fallback.pointer)
         pointerSize = value(.pointerSize, fallback.pointerSize)
+        pointerColor = value(.pointerColor, fallback.pointerColor)
         farButton = value(.farButton, fallback.farButton)
         nearButtonHover = value(.nearButtonHover, fallback.nearButtonHover)
         nearButtonTouch = value(.nearButtonTouch, fallback.nearButtonTouch)

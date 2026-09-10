@@ -1,5 +1,6 @@
 import AppKit
 import QuartzCore
+import SwiftUI
 
 /// Draws a dot where the pen is, in place of the system arrow.
 ///
@@ -41,6 +42,7 @@ final class PenPointerOverlay: PenPointerDisplay {
     // Main thread only, below here.
     private var window: NSPanel?
     private var diameter: CGFloat = 14
+    private var ringColor: RGBAColor = .systemGreen
     private var hasReportedAppearance = false
 
     init(cursorVisibility: CursorVisibilityController) {
@@ -56,6 +58,7 @@ final class PenPointerOverlay: PenPointerDisplay {
         lock.unlock()
 
         diameter = CGFloat(configuration.pointerSize)
+        ringColor = configuration.pointerColor
         styleDot()
 
         if changed {
@@ -189,11 +192,12 @@ final class PenPointerOverlay: PenPointerDisplay {
 
     /// The window *is* the dot: one layer, sized and rounded to match.
     ///
-    /// Fixed colours rather than the semantic ones. A dynamic colour resolves
-    /// against this application's appearance, and this application is not the
-    /// one underneath — the dot floats over whatever the pen is pointing at, so
-    /// it carries its own contrast: a dark core inside a light ring reads on
-    /// both.
+    /// The core is a fixed dark rather than a semantic colour. A dynamic colour
+    /// resolves against this application's appearance, and this application is
+    /// not the one underneath — the dot floats over whatever the pen is pointing
+    /// at, so it carries its own contrast: a dark core for pale windows, a
+    /// bright ring for dark ones. Only the ring is the user's to choose, which
+    /// is why the core is not.
     private func styleDot() {
         guard let layer = window?.contentView?.layer else { return }
         let side = diameter + Self.margin
@@ -204,8 +208,10 @@ final class PenPointerOverlay: PenPointerDisplay {
         dot.frame = CGRect(x: inset, y: inset, width: diameter, height: diameter)
         dot.cornerRadius = diameter / 2
         dot.backgroundColor = NSColor(white: 0.1, alpha: 0.85).cgColor
-        dot.borderColor = NSColor(white: 1.0, alpha: 0.95).cgColor
-        dot.borderWidth = max(1, diameter / 10)
+        dot.borderColor = ringColor.cgColor
+        // A tenth of the diameter is a hairline at any size worth using; a sixth
+        // is thick enough that the colour is what the pointer looks like.
+        dot.borderWidth = max(1.5, diameter / 6)
         layer.addSublayer(dot)
 
         if let window, window.frame.width != side {
@@ -219,5 +225,35 @@ final class PenPointerOverlay: PenPointerDisplay {
     /// measures it upwards from the bottom of the same one.
     private static func cocoaY(fromQuartz y: CGFloat) -> CGFloat {
         (NSScreen.screens.first?.frame.maxY ?? 0) - y
+    }
+}
+
+extension RGBAColor {
+
+    /// For drawing. sRGB explicitly, because that is the space the components
+    /// were stored in.
+    var cgColor: CGColor {
+        NSColor(srgbRed: red, green: green, blue: blue, alpha: alpha).cgColor
+    }
+
+    /// For the colour well in the settings window.
+    var color: Color {
+        Color(.sRGB, red: red, green: green, blue: blue, opacity: alpha)
+    }
+
+    /// Back from the colour well. Falls back to what it was rather than to
+    /// nothing, because a colour that cannot be expressed in sRGB — from the
+    /// system picker's other models — must not silently become black.
+    init(_ color: Color, fallback: RGBAColor) {
+        guard let srgb = NSColor(color).usingColorSpace(.sRGB) else {
+            self = fallback
+            return
+        }
+        self.init(
+            red: Double(srgb.redComponent),
+            green: Double(srgb.greenComponent),
+            blue: Double(srgb.blueComponent),
+            alpha: Double(srgb.alphaComponent)
+        )
     }
 }
