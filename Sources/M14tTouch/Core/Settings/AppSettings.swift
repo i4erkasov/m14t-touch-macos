@@ -35,6 +35,9 @@ struct AppSettings: Equatable, Codable {
     /// Thresholds, delays and cursor policy.
     var gestures = GestureConfiguration()
 
+    /// What the stylus's button and eraser do.
+    var pen = PenConfiguration()
+
     /// Which display the panel is mapped to, by identity where possible so it
     /// is found again after replugging (spec §17).
     var display: DisplaySelection = .automatic
@@ -57,6 +60,7 @@ struct AppSettings: Equatable, Codable {
         mode = value(.mode, fallback.mode)
         penEnabled = value(.penEnabled, fallback.penEnabled)
         gestures = value(.gestures, fallback.gestures)
+        pen = value(.pen, fallback.pen)
         display = value(.display, fallback.display)
         invertX = value(.invertX, fallback.invertX)
         invertY = value(.invertY, fallback.invertY)
@@ -77,6 +81,7 @@ extension AppSettings {
         config.mode = mode
         config.penEnabled = penEnabled
         config.gestures = gestures
+        config.pen = pen
         config.display = display
         config.invertX = invertX
         config.invertY = invertY

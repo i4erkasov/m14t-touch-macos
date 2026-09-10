@@ -118,6 +118,17 @@ enum ArgumentParser {
             // Lets the menu-bar app be run from a terminal during development,
             // where its grants already exist and a rebuild does not look like a
             // new application to the permission system.
+            case "--pen-button", "--pen-eraser":
+                guard let raw = iterator.next() else {
+                    return .error("\(arg) requires a value")
+                }
+                guard let mapping = PenButtonMapping(rawValue: raw) else {
+                    let known = PenButtonMapping.allCases.map(\.rawValue).joined(separator: ", ")
+                    return .error("Unknown mapping '\(raw)' — expected one of: \(known)")
+                }
+                if arg == "--pen-button" { config.pen.barrelButton = mapping }
+                else { config.pen.eraser = mapping }
+
             case "--pen":           config.penEnabled = true
             case "--no-pen":        config.penEnabled = false
 
@@ -152,6 +163,9 @@ enum ArgumentParser {
     OPTIONS:
       --app                Run as a menu-bar application rather than in the
                            terminal. Implied when launched from an .app bundle
+      --pen-button ACTION  What the far stylus button does (default: rightClick)
+      --pen-eraser ACTION  What a stroke of the eraser end does (default: none)
+                             none, leftClick, rightClick, middleClick
       --no-pen             Leave the stylus to macOS. By default the driver
                            takes the device exclusively, which is the only way
                            to stop the pointer drifting to another screen while

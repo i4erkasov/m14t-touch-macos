@@ -89,7 +89,7 @@ final class HIDTouchDriver {
     // interpreted; and its own backend.
     private var penMapper: CoordinateMapper
     private var pen = PenRecognizer()
-    private let penBackend: PenEventBackend = PenMouseBackend()
+    private let penBackend = PenMouseBackend()
     private let penPressure = PressureScale.m14t
 
     private var penRawX: Double = 0
@@ -126,6 +126,7 @@ final class HIDTouchDriver {
         self.config = config
         self.engine = engine
         self.calibrationController = CalibrationController(config: config)
+        self.penBackend.apply(config.pen)
 
         // Provisional calibration; refined once the device is connected.
         let initial = CalibrationData.identity
@@ -277,6 +278,8 @@ final class HIDTouchDriver {
             guard let self else { return }
             self.config.mode = settings.mode
             self.config.gestures = settings.gestures
+            self.config.pen = settings.pen
+            self.penBackend.apply(settings.pen)
             self.config.invertX = settings.invertX
             self.config.invertY = settings.invertY
             self.config.display = settings.display

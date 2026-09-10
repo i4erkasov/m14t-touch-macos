@@ -9,6 +9,7 @@ struct SettingsView: View {
         TabView {
             GeneralTab(model: model).tabItem { Label("General", systemImage: "gearshape") }
             TouchTab(model: model).tabItem { Label("Touch", systemImage: "hand.point.up.left") }
+            PenTab(model: model).tabItem { Label("Pen", systemImage: "pencil.tip") }
             CalibrationTab(model: model).tabItem { Label("Calibration", systemImage: "scope") }
         }
         .frame(width: 460, height: 420)
@@ -142,6 +143,49 @@ private struct TouchTab: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+// MARK: - Pen
+
+private struct PenTab: View {
+    @ObservedObject var model: SettingsModel
+
+    var body: some View {
+        Form {
+            Section("Stylus") {
+                Toggle("Handle the stylus", isOn: $model.settings.penEnabled)
+                Text("Takes the panel from macOS, which is the only way to stop the pointer drifting to another screen while hovering. The pen does nothing at all while this app is not running.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if model.settings.penEnabled {
+                Section("Buttons") {
+                    Picker("Far button", selection: $model.settings.pen.barrelButton) {
+                        ForEach(PenButtonMapping.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    Text("The button nearest the tip is not listed: it is not a button. Holding it makes the panel report an eraser stroke, so it selects a tool rather than performing an action.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section("Eraser") {
+                    Picker("A stroke of the eraser", selection: $model.settings.pen.eraser) {
+                        ForEach(PenButtonMapping.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    Text("Nothing, by default. macOS has no gesture meaning \"erase\" — applications that support one learn it from a tablet event this driver cannot yet send.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                // Deliberately absent: tilt and pressure curves. The panel never
+                // reports tilt, and pressure has no path to applications yet, so
+                // controls for either would be settings that change nothing
+                // (pen spec §30).
             }
         }
         .formStyle(.grouped)

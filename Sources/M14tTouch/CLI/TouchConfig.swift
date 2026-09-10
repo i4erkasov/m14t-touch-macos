@@ -13,6 +13,9 @@ struct TouchConfig {
     /// Handle the stylus, which requires taking the device from macOS.
     var penEnabled: Bool = true
 
+    /// What the stylus's button and eraser do.
+    var pen = PenConfiguration()
+
     /// Which display the panel is mapped to.
     ///
     /// Defaults to automatic — the first external display — rather than a fixed
