@@ -149,6 +149,11 @@ final class HIDTouchDriver {
         self.engine = engine
         self.calibrationController = CalibrationController(config: config)
         self.penBackend.apply(config.pen)
+        // The backend belongs to the touch queue, so anything it defers has to
+        // come back to the same queue rather than to main.
+        self.penBackend.schedule = { [queue] delay, work in
+            queue.asyncAfter(deadline: .now() + delay, execute: work)
+        }
 
         // Provisional calibration; refined once the device is connected.
         let initial = CalibrationData.identity

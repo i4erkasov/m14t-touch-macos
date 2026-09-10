@@ -23,6 +23,26 @@ final class PenMouseBackend: PenEventBackend {
     /// Where the pointer was before the pen took it.
     var parking = CursorParking()
 
+    /// How long the pen must stay away before the pointer goes back.
+    ///
+    /// Not zero, and this is the whole point. A pen loses proximity every time
+    /// it is lifted between strokes, not only when it is put down, so returning
+    /// the pointer immediately warped it across the desk after every stroke —
+    /// and a warp is not free: drawing visibly lagged. Waiting distinguishes
+    /// "lifted" from "finished".
+    static let restoreDelay: TimeInterval = 0.8
+
+    /// Run something later. Injected so the driver can keep it on the touch
+    /// queue — this object is confined to it — and so tests can fire it by hand.
+    var schedule: (TimeInterval, @escaping () -> Void) -> Void = { delay, work in
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+
+    /// Counts visits, so a restore scheduled for one can be abandoned when the
+    /// next begins. Cheaper and simpler than holding a cancellable timer, and
+    /// the work it guards is a single comparison.
+    private var visit = 0
+
     /// Whether the near button has been held through a contact.
     ///
     /// The near button means two things and they must not both happen. Held
@@ -45,6 +65,13 @@ final class PenMouseBackend: PenEventBackend {
         heldButtons = []
         nearButtonUsedForContact = false
         self.configuration = configuration
+
+        // Switching the return off while the pen is already away must not leave
+        // one last warp armed from before the change.
+        if !configuration.restoresPointerOnExit {
+            visit &+= 1
+            parking.forget()
+        }
     }
 
     func handle(_ action: PenAction) {
@@ -59,14 +86,22 @@ final class PenMouseBackend: PenEventBackend {
             if tool == .eraser { nearButtonUsedForContact = true }
             emit(action)
 
+        case .proximityEntered:
+            // The pen is back, so any restore waiting to happen is abandoned:
+            // it was for a visit that turned out not to have ended.
+            visit &+= 1
+            emit(action)
+
         case .proximityExited:
-            // Before anything else: the dot is taken down straight after this,
-            // and the arrow underneath should reappear where the user left it
-            // rather than flick across from the panel.
-            if configuration.restoresPointerOnExit {
-                parking.restore()
-            } else {
+            guard configuration.restoresPointerOnExit else {
                 parking.forget()
+                break
+            }
+            visit &+= 1
+            let departure = visit
+            schedule(Self.restoreDelay) { [weak self] in
+                guard let self, self.visit == departure else { return }
+                self.parking.restore()
             }
 
         default:

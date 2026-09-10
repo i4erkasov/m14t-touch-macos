@@ -99,36 +99,115 @@ final class CursorParkingTests: XCTestCase {
 
     // MARK: - The pen
 
-    // `proximityExited` posts no events, so this exercises the real wiring
-    // without anything reaching the window server.
-    func testThePenGivesThePointerBackWhenItLeaves() {
-        var warps: [CGPoint] = []
-        let backend = PenMouseBackend(configuration: PenConfiguration())
-        backend.parking.readLocation = { self.origin }
-        backend.parking.warp = { warps.append($0) }
-        backend.parking.rememberIfNeeded()
-
-        backend.handle(.proximityExited)
-
-        XCTAssertEqual(warps, [origin])
-    }
-
-    func testThePenKeepsThePointerWhenTheSettingIsOff() {
+    /// A backend whose pointer calls and timer are all under the test's control.
+    ///
+    /// `pointerFollowsHover` is off so that no action posts an event: the tests
+    /// below drive real code paths, and a posted event would move the pointer of
+    /// whoever is running them.
+    private func makeBackend(restores: Bool = true) -> (
+        backend: PenMouseBackend,
+        warps: () -> [CGPoint],
+        fireTimer: () -> Void,
+        delays: () -> [TimeInterval]
+    ) {
         var configuration = PenConfiguration()
-        configuration.restoresPointerOnExit = false
+        configuration.restoresPointerOnExit = restores
+        configuration.pointerFollowsHover = false
 
         var warps: [CGPoint] = []
+        var pending: [(TimeInterval, () -> Void)] = []
+
         let backend = PenMouseBackend(configuration: configuration)
         backend.parking.readLocation = { self.origin }
         backend.parking.warp = { warps.append($0) }
+        backend.schedule = { delay, work in pending.append((delay, work)) }
+
+        return (
+            backend,
+            { warps },
+            { pending.forEach { $0.1() }; pending = [] },
+            { pending.map(\.0) }
+        )
+    }
+
+    // The regression this exists for: a pen loses proximity every time it is
+    // lifted between strokes, so returning the pointer at once warped it across
+    // the desk after every stroke, and the drawing lagged behind the warps.
+    func testLeavingSchedulesTheRestoreRatherThanDoingItNow() {
+        let (backend, warps, fireTimer, delays) = makeBackend()
         backend.parking.rememberIfNeeded()
 
         backend.handle(.proximityExited)
+        XCTAssertTrue(warps().isEmpty, "the pointer moved before the pen was gone")
+        XCTAssertEqual(delays(), [PenMouseBackend.restoreDelay])
 
-        XCTAssertTrue(warps.isEmpty)
+        fireTimer()
+        XCTAssertEqual(warps(), [origin])
+    }
+
+    // Lifting between strokes: the pen comes back before the wait is over, and
+    // the pointer never leaves the panel.
+    func testAPenThatComesBackAbandonsTheRestore() {
+        let (backend, warps, fireTimer, _) = makeBackend()
+        backend.parking.rememberIfNeeded()
+
+        backend.handle(.proximityExited)
+        backend.handle(.proximityEntered(position: panel))
+        fireTimer()
+
+        XCTAssertTrue(warps().isEmpty)
+        // And the original position is still held, so putting the pen down at
+        // the end of the session still returns the pointer.
+        XCTAssertTrue(backend.parking.isParked)
+    }
+
+    // Several lifts in a row must not leave several restores armed.
+    func testOnlyTheLastDepartureCounts() {
+        let (backend, warps, fireTimer, _) = makeBackend()
+        backend.parking.rememberIfNeeded()
+
+        for _ in 0..<3 {
+            backend.handle(.proximityExited)
+            backend.handle(.proximityEntered(position: panel))
+        }
+        backend.handle(.proximityExited)
+        fireTimer()
+
+        XCTAssertEqual(warps(), [origin])
+    }
+
+    func testThePenKeepsThePointerWhenTheSettingIsOff() {
+        let (backend, warps, fireTimer, delays) = makeBackend(restores: false)
+        backend.parking.rememberIfNeeded()
+
+        backend.handle(.proximityExited)
+        fireTimer()
+
+        XCTAssertTrue(warps().isEmpty)
+        XCTAssertTrue(delays().isEmpty, "nothing should have been scheduled at all")
         // Forgotten rather than kept: the next visit must start from where the
         // pointer is then, not from where it was hours ago.
         XCTAssertFalse(backend.parking.isParked)
+    }
+
+    func testSwitchingTheReturnOffDisarmsARestoreAlreadyWaiting() {
+        let (backend, warps, fireTimer, _) = makeBackend()
+        backend.parking.rememberIfNeeded()
+        backend.handle(.proximityExited)
+
+        var off = PenConfiguration()
+        off.restoresPointerOnExit = false
+        off.pointerFollowsHover = false
+        backend.apply(off)
+
+        fireTimer()
+        XCTAssertTrue(warps().isEmpty)
+    }
+
+    // Documents the intent rather than the number: the wait has to outlast a
+    // lift between strokes, or it is not doing its job.
+    func testTheWaitOutlastsALiftBetweenStrokes() {
+        XCTAssertGreaterThanOrEqual(PenMouseBackend.restoreDelay, 0.5)
     }
 
     func testReturningThePointerIsOnByDefault() {
