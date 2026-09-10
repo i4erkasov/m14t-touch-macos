@@ -409,6 +409,17 @@ private struct DiagnosticsSettings: View {
 
     var body: some View {
         Form {
+            // First, not last. This is the section someone opens when the pen
+            // has stopped working, and a fix they have to scroll to find is a
+            // fix they do not find.
+            Section {
+                Button("Reconnect the panel") { model.reconnect?() }
+            } header: {
+                Text("Recovery")
+            } footer: {
+                Text("Releases the panel and takes it again — the same thing unplugging the cable does. If the pen has gone silent while touch still works, try this first, then take the battery out of the stylus and put it back: both have been seen to bring it back.")
+            }
+
             Section("Device") {
                 LabeledContent("Display", value: model.displayName)
                 LabeledContent("Touch interface", value: model.status.deviceName ?? "—")
@@ -451,14 +462,6 @@ private struct DiagnosticsSettings: View {
                 Text("Live input")
             } footer: {
                 Text("What the panel is reporting as you touch it. Panel coordinates are before calibration — the numbers to quote when a touch lands in the wrong place. \(live.contactCountNote)")
-            }
-
-            Section {
-                Button("Reconnect the panel") { model.reconnect?() }
-            } header: {
-                Text("Recovery")
-            } footer: {
-                Text("Releases the panel and takes it again. Try this if the pen goes silent while touch still works — the same thing unplugging the cable does, without reaching for the cable.")
             }
 
             Section {

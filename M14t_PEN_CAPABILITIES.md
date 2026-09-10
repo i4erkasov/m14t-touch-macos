@@ -203,7 +203,7 @@ held during contact is a real eraser to the hardware and cannot be presented as
 one to applications. It stays what `PenTouchAction` already offers — nothing, or
 an ordinary stroke.
 
-## The pen collection can be wedged, and only a replug clears it
+## The pen can stop transmitting, and the stylus is the likeliest culprit
 
 Observed over an afternoon of repeated driver restarts. The pen stopped
 reporting entirely — no proximity, no coordinates, nothing from its collection
@@ -229,8 +229,22 @@ not always polite. Both are fixed: the app installs the same `ShutdownHandler`
 the CLI has, and `stop()` waits (bounded) for the cancellation to complete
 before returning.
 
-If the pen ever goes silent again while the finger still works, replug the
-cable first. It is not the stylus.
+**A later correction, and it matters.** The paragraph above originally ended
+"it is not the stylus", on the strength of a cable replug having fixed it. That
+was wrong, or at least unfounded. It happened again during ordinary use — no
+unclean exit involved, the driver running normally the whole time — and what
+fixed it that time was **taking the battery out of the stylus and putting it
+back**. Two resets, two different devices reset, both effective; the one thing
+common to them is the stylus's radio link, not the cable.
+
+So the honest statement is: the pen stops transmitting, the panel's finger
+collection is unaffected, and the driver is not involved — that part is still
+established by the trace, which recorded zero pen values while the finger
+worked. Either reset has been seen to restore it. Try the stylus's battery
+first; it is the smaller intervention and the better-supported suspect.
+
+The shutdown fix below was a real bug and is verified, but it was not the cause
+of this.
 
 ## What the pipeline costs, measured
 
