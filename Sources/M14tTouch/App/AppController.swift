@@ -229,6 +229,9 @@ final class AppController: NSObject, NSApplicationDelegate {
         model.setActionLogging = { [weak self] enabled in
             self?.driver.setActionLogging(enabled)
         }
+        model.reconnect = { [weak self] in
+            self?.driver.restart()
+        }
         driver.onLiveInput = { [weak self] live in
             // Delivered on main by the driver, which is what makes this safe.
             MainActor.assumeIsolated { self?.settingsModel?.live = live }

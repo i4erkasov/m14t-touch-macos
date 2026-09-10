@@ -117,6 +117,16 @@ final class HIDTouchDriver {
     /// Logged once, because "the panel does nothing until you touch it" and
     /// "the panel is talking and we are ignoring it" look identical from the
     /// outside and have nothing in common as problems.
+    /// A heartbeat for the pen, once a second while it is sending anything.
+    ///
+    /// Always on, and one line per second, because the question it answers
+    /// cannot be answered any other way after the fact: when the pen appears to
+    /// die, the log has to distinguish the panel having stopped sending from
+    /// the driver having stopped acting on what it sends. Those look identical
+    /// from the outside and have nothing in common as causes.
+    private var penValueCount = 0
+    private var penHeartbeatStart = DispatchTime.now()
+
     /// Signalled when the HID manager's cancellation has actually completed.
     private var cancellation: DispatchSemaphore?
 
@@ -312,6 +322,23 @@ final class HIDTouchDriver {
             : "✅ Listening for touch device…")
     }
 
+    /// Release the panel and take it again.
+    ///
+    /// For the failure this cannot otherwise recover from: the pen collection
+    /// falls silent while the finger keeps working, and unplugging the cable is
+    /// the only known cure (`M14t_PEN_CAPABILITIES.md`). Releasing and
+    /// re-seizing is the same shape of remedy without reaching behind the desk,
+    /// and it costs nothing to try before doing that.
+    ///
+    /// Not called automatically. A driver that reconnects itself whenever the
+    /// pen goes quiet would do it constantly — a pen that is simply not being
+    /// used is quiet too.
+    func restart() {
+        log("🔄 Releasing the panel and taking it again")
+        stop()
+        start()
+    }
+
     /// Start or stop narrating recognised actions to the system log, from any
     /// thread.
     func setActionLogging(_ enabled: Bool) {
@@ -339,6 +366,27 @@ final class HIDTouchDriver {
             self.liveWindowStart = DispatchTime.now()
             if !enabled { self.live = LiveInput() }
         }
+    }
+
+    /// Say once a second that the pen is still talking, and what it is saying.
+    private func penHeartbeat() {
+        penValueCount += 1
+        let elapsed = Double(
+            DispatchTime.now().uptimeNanoseconds &- penHeartbeatStart.uptimeNanoseconds
+        ) / 1_000_000_000
+        guard elapsed >= 1 else { return }
+
+        var held: [String] = []
+        if penButtons.contains(.barrel) { held.append("far") }
+        if penButtons.contains(.eraserMode) { held.append("near") }
+
+        log("✒️  pen: \(Int(Double(penValueCount) / elapsed)) values/s  "
+            + "inRange=\(penInRange) tip=\(penTipDown) eraser=\(penEraserDown) "
+            + "buttons=[\(held.joined(separator: ","))] "
+            + "raw=(\(Int(penRawX)),\(Int(penRawY)))")
+
+        penValueCount = 0
+        penHeartbeatStart = DispatchTime.now()
     }
 
     /// Note that a value arrived, and publish if enough time has passed.
@@ -741,6 +789,8 @@ final class HIDTouchDriver {
         default:
             return                       // nothing else changes the pen's state
         }
+
+        penHeartbeat()
 
         live.source = .pen
         live.rawX = penRawX

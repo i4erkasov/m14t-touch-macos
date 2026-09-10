@@ -454,6 +454,14 @@ private struct DiagnosticsSettings: View {
             }
 
             Section {
+                Button("Reconnect the panel") { model.reconnect?() }
+            } header: {
+                Text("Recovery")
+            } footer: {
+                Text("Releases the panel and takes it again. Try this if the pen goes silent while touch still works — the same thing unplugging the cable does, without reaching for the cable.")
+            }
+
+            Section {
                 Toggle("Log pen actions to the system log", isOn: $model.logsInput)
             } header: {
                 Text("Logging")

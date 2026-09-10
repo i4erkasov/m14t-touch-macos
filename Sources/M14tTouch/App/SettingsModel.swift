@@ -70,6 +70,9 @@ final class SettingsModel: ObservableObject {
     /// Narrate pen actions to the system log. Set by the controller.
     var setActionLogging: ((Bool) -> Void)?
 
+    /// Release the panel and take it again. Set by the controller.
+    var reconnect: (() -> Void)?
+
     /// Whether that narration is on. Not persisted: it is a thing you switch on
     /// to catch a problem, not a preference, and one left on forever would fill
     /// the log for nobody.
