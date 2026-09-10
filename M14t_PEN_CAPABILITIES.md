@@ -24,7 +24,7 @@ distinguishable).
 | Far button (`BarrelSwitch`) | **SUPPORTED** | isolated run: 4 presses, nothing else fired |
 | Eraser (`Eraser`) | **SUPPORTED** | driven by the near button while touching |
 | Battery level | **SUPPORTED** | `BatteryStrength`, reported unprompted |
-| Tilt (`XTilt` / `YTilt`) | **UNSUPPORTED** | declared −90…90; nothing in 35 s of hard tilting |
+| Tilt (`XTilt` / `YTilt`) | **UNSUPPORTED** | see below — a checked absence, not an unobserved one |
 | Azimuth / Altitude / Twist | **UNSUPPORTED** | never sent |
 | `SecondaryBarrelSwitch` | **UNSUPPORTED** | declared; the pen has only two buttons |
 
@@ -69,6 +69,27 @@ Pressure is monotonic with force. Two ascending series were recorded:
 Pressure reads non-zero for a few samples while not touching, at contact
 transitions. Contact must be taken from `TipSwitch`, never from a pressure
 threshold — which is what pen spec §38 asks for, and now there is a reason.
+
+## Tilt is absent, and the absence was checked
+
+Worth spelling out, because the first two attempts to establish it were not
+evidence and one of them was written down as though it were.
+
+The first run tilted only in hover, and many digitizers report orientation only
+during contact — so nothing arriving meant nothing. The second pressed the tip
+but proved nothing either: the probe reported only tilt, so "no tilt" could not
+be told apart from "the pen was never in range".
+
+The third run reported what else was happening alongside:
+
+```
+contacts (tip presses): 4
+coordinate samples:     6155
+pressure samples:       2589   peak 2409
+tilt:                   nothing
+```
+
+The pen was demonstrably working. **That** is what makes the absence a finding.
 
 ## Behaviour
 
