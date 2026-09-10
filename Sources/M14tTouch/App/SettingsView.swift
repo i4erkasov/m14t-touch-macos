@@ -109,13 +109,16 @@ private struct GeneralSettings: View {
                     .imageScale(.small)
                 }
 
-                Picker("Display", selection: displaySelection) {
-                    ForEach(model.displays, id: \.index) { display in
+                Picker("Touch display", selection: displaySelection) {
+                    ForEach(model.selectableDisplays, id: \.index) { display in
                         Text(describe(display)).tag(display.index)
                     }
                 }
+                .disabled(model.selectableDisplays.count < 2)
             } footer: {
-                Text("Touches are mapped onto this display.")
+                Text(model.selectableDisplays.count < 2
+                     ? "Which screen your touches land on."
+                     : "Which screen your touches land on. The built-in display is not listed — a touch panel is never it.")
             }
 
             Section {
@@ -144,16 +147,20 @@ private struct GeneralSettings: View {
         Binding(
             get: { model.selectedDisplayIndex ?? -1 },
             set: { index in
-                if let display = model.displays.first(where: { $0.index == index }) {
+                if let display = model.selectableDisplays.first(where: { $0.index == index }) {
                     model.selectDisplay(display)
                 }
             }
         )
     }
 
+    /// Names the monitor, with its size only to tell two of a kind apart.
+    ///
+    /// Listing them by resolution read as a resolution setting, which is not
+    /// what this chooses.
     private func describe(_ display: DisplayInfo) -> String {
-        let size = "\(Int(display.bounds.width)) × \(Int(display.bounds.height))"
-        return display.isBuiltin ? "\(size) (built-in)" : size
+        let name = display.name ?? (display.isBuiltin ? "Built-in display" : "Display \(display.index)")
+        return "\(name) — \(Int(display.bounds.width)) × \(Int(display.bounds.height))"
     }
 }
 

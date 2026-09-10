@@ -65,6 +65,21 @@ final class SettingsModel: ObservableObject {
         )
     }
 
+    /// The displays worth offering as a touch target.
+    ///
+    /// External ones only. A touch panel is by definition not the built-in
+    /// screen, and mapping touches onto a screen nobody can reach is not a
+    /// choice anyone means to make.
+    ///
+    /// It stops there. Which external display carries the touch panel cannot be
+    /// known: the touch interface identifies itself as `2D1F:524C` over USB and
+    /// the monitor as vendor `30AE` over EDID, and nothing connects the two. So
+    /// a second external monitor is listed alongside, and the user says which.
+    var selectableDisplays: [DisplayInfo] {
+        let external = displays.filter { !$0.isBuiltin }
+        return external.isEmpty ? displays : external
+    }
+
     /// What macOS calls the target display, for showing to a person.
     var displayName: String {
         DisplayResolver.resolve(settings.display, among: displays)?.display.name ?? "Touch display"
