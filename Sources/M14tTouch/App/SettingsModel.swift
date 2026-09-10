@@ -36,6 +36,10 @@ final class SettingsModel: ObservableObject {
     private let apply: (AppSettings) -> Void
     private let calibrationStore: CalibrationStore
 
+    /// Starts guided calibration, or `nil` when there is no app to host it —
+    /// the command-line build has no overlay to show.
+    var startCalibration: (() -> Void)?
+
     init(
         settings: AppSettings,
         status: DriverStatus,

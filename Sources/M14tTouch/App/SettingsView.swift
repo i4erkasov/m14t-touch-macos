@@ -171,14 +171,14 @@ private struct CalibrationTab: View {
             }
 
             Section {
+                if let start = model.startCalibration {
+                    Button("Calibrate…", action: start)
+                    Text("Shows four targets on the panel. Touch each one, then check the result before keeping it.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Button("Reset calibration", role: .destructive) { model.resetCalibration() }
                     .disabled(model.calibration == nil)
-                // No Calibrate button here on purpose: guided calibration is
-                // v0.4, and a button that silently started learning bounds
-                // without telling you where to touch would be worse than none.
-                Text("Calibrating from the app arrives in a later version. For now: m14ttouch --auto-calibrate, then touch all four corners.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

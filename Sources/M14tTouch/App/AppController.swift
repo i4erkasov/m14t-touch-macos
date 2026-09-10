@@ -23,6 +23,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var settingsWindow: NSWindow?
     private var settingsModel: SettingsModel?
+    private lazy var calibrationOverlay = CalibrationOverlayController(driver: driver)
 
     init(
         driver: HIDTouchDriver,
@@ -114,6 +115,32 @@ final class AppController: NSObject, NSApplicationDelegate {
         settingsModel?.refresh()
     }
 
+    @objc private func startCalibration() {
+        guard let display = DisplayResolver.resolve(settings.display)?.display else { return }
+
+        let started = calibrationOverlay.begin(on: display) { [weak self] result in
+            guard let self, let result else { return }   // cancelled: keep what was there
+            CalibrationStore.shared.save(result.calibration, for: display.identity)
+            // The solver works out which way the panel counts, so the user does
+            // not have to find a checkbox to report that it is mirrored.
+            self.settings.invertX = result.invertX
+            self.settings.invertY = result.invertY
+            self.persist()
+            self.driver.apply(self.settings)
+            self.settingsModel?.settings = self.settings
+            self.settingsModel?.refresh()
+        }
+
+        if !started {
+            // The chosen display is not among the screens AppKit knows about, so
+            // there is nowhere to put the overlay that the user could see.
+            let alert = NSAlert()
+            alert.messageText = "Can't show the calibration screen"
+            alert.informativeText = "The display chosen in Settings isn't connected."
+            alert.runModal()
+        }
+    }
+
     @objc private func showSettings() {
         if settingsWindow == nil { makeSettingsWindow() }
         // A menu-bar app is an accessory: without activating, its window opens
@@ -134,6 +161,10 @@ final class AppController: NSObject, NSApplicationDelegate {
                 self.cursorVisibility.setPolicy(updated.gestures.cursorHiding)
                 self.updateStatusItemAppearance()
             }
+        }
+        model.startCalibration = { [weak self] in
+            self?.settingsWindow?.orderOut(nil)   // it would sit over the overlay
+            self?.startCalibration()
         }
         settingsModel = model
 
@@ -162,6 +193,10 @@ extension AppController: NSMenuDelegate {
     /// Rebuilt each time it opens rather than mutated in place, so what it shows
     /// is derived from the current state and cannot drift out of step with it.
     func menuNeedsUpdate(_ menu: NSMenu) {
+        // Item state is decided here, from current state; without this AppKit
+        // re-enables items by its own rules and Calibrate would be clickable
+        // with no panel attached.
+        menu.autoenablesItems = false
         menu.removeAllItems()
 
         menu.addItem(disabled(status.isConnected
@@ -188,6 +223,13 @@ extension AppController: NSMenuDelegate {
         }
 
         menu.addItem(.separator())
+        let calibrate = NSMenuItem(
+            title: "Calibrate…", action: #selector(startCalibration), keyEquivalent: ""
+        )
+        calibrate.target = self
+        calibrate.isEnabled = status.isConnected
+        menu.addItem(calibrate)
+
         let settingsItem = NSMenuItem(
             title: "Settings…", action: #selector(showSettings), keyEquivalent: ","
         )
