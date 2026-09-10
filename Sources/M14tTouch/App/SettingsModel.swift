@@ -71,7 +71,40 @@ final class SettingsModel: ObservableObject {
     var setActionLogging: ((Bool) -> Void)?
 
     /// Release the panel and take it again. Set by the controller.
-    var reconnect: (() -> Void)?
+    var reconnect: (((Bool) -> Void)?) -> Void = { _ in }
+
+    /// What the reconnect button is doing, so that pressing it says something.
+    enum Reconnection: Equatable {
+        case idle
+        case working
+        case succeeded
+        case failed
+    }
+
+    @Published private(set) var reconnection: Reconnection = .idle
+
+    func reconnectPanel() {
+        guard reconnection != .working else { return }
+        reconnection = .working
+
+        // A turn of the run loop before the work starts, so the spinner is on
+        // screen before it. Releasing the panel waits for IOKit to confirm the
+        // cancellation — up to half a second on this thread — and a progress
+        // indicator that appears after the wait is over indicates nothing.
+        DispatchQueue.main.async { [weak self] in
+            self?.beginReconnect()
+        }
+    }
+
+    private func beginReconnect() {
+        reconnect { [weak self] connected in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.reconnection = connected ? .succeeded : .failed
+                self.refresh()
+            }
+        }
+    }
 
     /// Whether that narration is on. Not persisted: it is a thing you switch on
     /// to catch a problem, not a preference, and one left on forever would fill

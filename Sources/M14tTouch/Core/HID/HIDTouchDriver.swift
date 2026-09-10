@@ -333,10 +333,23 @@ final class HIDTouchDriver {
     /// Not called automatically. A driver that reconnects itself whenever the
     /// pen goes quiet would do it constantly — a pen that is simply not being
     /// used is quiet too.
-    func restart() {
+    /// - Parameter completion: whether a device was found again, on the main
+    ///   queue. Reported a moment later rather than returned, because IOKit
+    ///   matches devices asynchronously: `start()` returning means the manager
+    ///   is listening, not that anything answered.
+    func restart(completion: ((Bool) -> Void)? = nil) {
         log("🔄 Releasing the panel and taking it again")
         stop()
+        // Cleared so the answer means something. Cancelling does not fire the
+        // removal callback, so without this the old status would survive and
+        // "still connected" would be indistinguishable from "connected again".
+        queue.sync { status = DriverStatus() }
         start()
+
+        queue.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            let connected = self?.status.isConnected ?? false
+            DispatchQueue.main.async { completion?(connected) }
+        }
     }
 
     /// Start or stop narrating recognised actions to the system log, from any

@@ -413,11 +413,35 @@ private struct DiagnosticsSettings: View {
             // has stopped working, and a fix they have to scroll to find is a
             // fix they do not find.
             Section {
-                Button("Reconnect the panel") { model.reconnect?() }
+                LabeledContent {
+                    switch model.reconnection {
+                    case .idle:
+                        EmptyView()
+                    case .working:
+                        // The whole reason this exists: pressing the button used
+                        // to look like pressing nothing.
+                        ProgressView().controlSize(.small)
+                    case .succeeded:
+                        Label("Panel found", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                            .labelStyle(.titleAndIcon)
+                            .imageScale(.small)
+                    case .failed:
+                        Label("No panel answered", systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                            .labelStyle(.titleAndIcon)
+                            .imageScale(.small)
+                    }
+                } label: {
+                    Button("Reconnect the panel") { model.reconnectPanel() }
+                        .disabled(model.reconnection == .working)
+                }
             } header: {
                 Text("Recovery")
             } footer: {
-                Text("Releases the panel and takes it again — the same thing unplugging the cable does. If the pen has gone silent while touch still works, try this first, then take the battery out of the stylus and put it back: both have been seen to bring it back.")
+                Text(model.reconnection == .failed
+                     ? "Nothing answered. Check the cable, then take the battery out of the stylus and put it back."
+                     : "Releases the panel and takes it again — the same thing unplugging the cable does. If the pen has gone silent while touch still works, try this first, then take the battery out of the stylus and put it back: both have been seen to bring it back.")
             }
 
             Section("Device") {
