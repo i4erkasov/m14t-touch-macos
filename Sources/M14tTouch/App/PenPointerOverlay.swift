@@ -43,7 +43,7 @@ final class PenPointerOverlay: PenPointerDisplay {
     private var window: NSPanel?
     private var diameter: CGFloat = 14
     private var ringColor: RGBAColor = .systemGreen
-    private var hasReportedAppearance = false
+    private var isShowing = false
     private var hasWarmed = false
 
     init(cursorVisibility: CursorVisibilityController) {
@@ -147,24 +147,37 @@ final class PenPointerOverlay: PenPointerDisplay {
             height: side
         )
         window.setFrame(frame, display: false)
-        if !window.isVisible { window.orderFrontRegardless() }
 
-        // Said once per appearance, because an overlay that fails to appear is
-        // otherwise silent: there is no error to catch, just nothing on screen.
-        if !hasReportedAppearance {
-            hasReportedAppearance = true
+        // Hidden by transparency, not by ordering out. Ordering a window in and
+        // out repeatedly is the part that stopped working after the first
+        // visit — the pen kept reporting, measured, and the dot stopped
+        // appearing — and it is also the slower of the two: 0.19 ms against
+        // nothing measurable. A window at alpha zero is invisible and, being
+        // click-through already, is in nobody's way.
+        if !window.isVisible { window.orderFrontRegardless() }
+        if window.alphaValue != 1 { window.alphaValue = 1 }
+
+        // Transitions only, so this stays quiet during a stroke while still
+        // being there when the dot does not show up. An overlay that fails to
+        // appear has no error to catch — there is simply nothing on screen.
+        if !isShowing {
+            isShowing = true
             let screen = NSScreen.screens.first { $0.frame.intersects(frame) }
             Log.line("""
-                ✒️  Pen dot at (\(Int(frame.midX)), \(Int(frame.midY))) \
+                ✒️  Pen dot shown at (\(Int(frame.midX)), \(Int(frame.midY))) \
                 on \(screen?.localizedName ?? "no screen"), \
-                size \(Int(diameter)), visible=\(window.isVisible)
+                size \(Int(diameter)), onscreen=\(window.isVisible), \
+                alpha=\(window.alphaValue)
                 """)
         }
     }
 
     private func conceal() {
-        window?.orderOut(nil)
-        hasReportedAppearance = false
+        window?.alphaValue = 0
+        if isShowing {
+            isShowing = false
+            Log.line("✒️  Pen dot hidden")
+        }
     }
 
     /// Pay the cost of the first appearance now, invisibly.
@@ -175,11 +188,8 @@ final class PenPointerOverlay: PenPointerDisplay {
     private func warmUp() {
         guard !hasWarmed, let window else { return }
         hasWarmed = true
-        let alpha = window.alphaValue
         window.alphaValue = 0
         window.orderFrontRegardless()
-        window.orderOut(nil)
-        window.alphaValue = alpha
     }
 
     private func makeWindow() -> NSPanel {
