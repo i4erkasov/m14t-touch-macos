@@ -84,4 +84,22 @@ struct PressureScale: Equatable {
         guard ceiling > floor else { return 0 }
         return min(max((raw - floor) / (ceiling - floor), 0), 1)
     }
+
+    /// The smallest pressure an event may carry while still meaning "touching".
+    ///
+    /// Zero in a tablet event means no contact at all. The panel's lightest
+    /// registering press normalises to about 0.006 — measured — so a real,
+    /// deliberate touch would otherwise arrive claiming not to be one.
+    static let minimumContactPressure = 0.02
+
+    /// The pressure to put in an event, for a contact that is definitely
+    /// happening.
+    ///
+    /// The scale is lifted off zero rather than clamped at it, so light strokes
+    /// stay distinguishable from each other instead of flattening onto one
+    /// minimum.
+    static func eventPressure(_ normalized: Double) -> Double {
+        let clamped = min(max(normalized, 0), 1)
+        return minimumContactPressure + clamped * (1 - minimumContactPressure)
+    }
 }

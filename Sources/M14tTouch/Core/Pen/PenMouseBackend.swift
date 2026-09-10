@@ -135,18 +135,19 @@ final class PenMouseBackend: PenEventBackend {
         for event in Self.mouseEvents(
             for: action,
             eraser: configuration.nearButtonTouch,
-            pointerFollowsHover: configuration.pointerFollowsHover
+            pointerFollowsHover: configuration.pointerFollowsHover,
+            sendsPressure: configuration.sendsPressure
         ) {
-            post(event.type, at: event.point)
+            post(event.type, at: event.point, pressure: event.pressure)
         }
     }
 
     /// Every event this backend sends goes through here, so nothing can move the
     /// pointer without first remembering where it was — the button presses do
     /// not go through `emit`, and they displace it just the same.
-    private func post(_ type: CGEventType, at point: CGPoint) {
+    private func post(_ type: CGEventType, at point: CGPoint, pressure: Double? = nil) {
         parking.rememberIfNeeded()
-        poster.post(type, at: point)
+        poster.post(type, at: point, pressure: pressure)
     }
 
     // MARK: - Mapping
@@ -160,8 +161,9 @@ final class PenMouseBackend: PenEventBackend {
     static func mouseEvents(
         for action: PenAction,
         eraser: PenTouchAction = .eraser,
-        pointerFollowsHover: Bool = true
-    ) -> [(type: CGEventType, point: CGPoint)] {
+        pointerFollowsHover: Bool = true,
+        sendsPressure: Bool = false
+    ) -> [(type: CGEventType, point: CGPoint, pressure: Double?)] {
         // What an eraser stroke turns into. `eraser` is the honest answer of
         // "nothing macOS understands": applications learn about an eraser from a
         // tablet event this backend cannot send, so the stroke produces no
@@ -172,23 +174,32 @@ final class PenMouseBackend: PenEventBackend {
         case .primaryClick:  mapping = .leftClick
         }
 
+        // Pressure only where there is a contact to have pressure. A hover has
+        // none, and an event claiming zero pressure claims not to be touching.
+        func touching(_ pressure: Double?) -> Double? {
+            guard sendsPressure else { return nil }
+            return PressureScale.eventPressure(pressure ?? 1)
+        }
+        // Lifting is the one contact event whose honest pressure is zero.
+        let lifting: Double? = sendsPressure ? 0 : nil
+
         switch action {
         case .proximityEntered(let position), .hover(let position):
-            return pointerFollowsHover ? [(.mouseMoved, position)] : []
+            return pointerFollowsHover ? [(.mouseMoved, position, nil)] : []
 
-        case .contactBegan(.tip, let position, _):
-            return [(.leftMouseDown, position)]
-        case .contactMoved(.tip, let position, _):
-            return [(.leftMouseDragged, position)]
+        case .contactBegan(.tip, let position, let pressure):
+            return [(.leftMouseDown, position, touching(pressure))]
+        case .contactMoved(.tip, let position, let pressure):
+            return [(.leftMouseDragged, position, touching(pressure))]
         case .contactEnded(.tip, let position):
-            return [(.leftMouseUp, position)]
+            return [(.leftMouseUp, position, lifting)]
 
-        case .contactBegan(.eraser, let position, _):
-            return down(mapping).map { [($0, position)] } ?? []
-        case .contactMoved(.eraser, let position, _):
-            return dragged(mapping).map { [($0, position)] } ?? []
+        case .contactBegan(.eraser, let position, let pressure):
+            return down(mapping).map { [($0, position, touching(pressure))] } ?? []
+        case .contactMoved(.eraser, let position, let pressure):
+            return dragged(mapping).map { [($0, position, touching(pressure))] } ?? []
         case .contactEnded(.eraser, let position):
-            return up(mapping).map { [($0, position)] } ?? []
+            return up(mapping).map { [($0, position, lifting)] } ?? []
 
         case .proximityExited, .buttonsChanged:
             return []

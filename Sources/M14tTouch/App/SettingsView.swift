@@ -343,6 +343,14 @@ private struct PenSettings: View {
                 }
 
                 Section {
+                    Toggle("Send pressure to applications", isOn: pen.sendsPressure)
+                } header: {
+                    Text("Pressure")
+                } footer: {
+                    Text("Marks strokes as coming from a tablet, which is what carries pressure — an ordinary click can only be full or none. Applications that do not understand tablets see the same click as before. The panel cannot say which end of the pen is touching, so an eraser stroke is not marked as one.")
+                }
+
+                Section {
                     Toggle("Ignore touches while the pen is near", isOn: pen.palmRejection)
                 } header: {
                     Text("Palm rejection")

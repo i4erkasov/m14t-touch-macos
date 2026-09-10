@@ -86,6 +86,19 @@ struct PenConfiguration: Equatable, Codable {
     /// moves nothing on the way out either.
     var restoresPointerOnExit: Bool = true
 
+    /// Tell applications how hard the pen is being pressed.
+    ///
+    /// Measured to work: an event marked as a tablet point arrives with its
+    /// pressure intact, where an ordinary mouse event carries only 1 or 0. An
+    /// application that does not understand tablets ignores the marking and
+    /// sees the same click it always did — but the marking is a real change to
+    /// what every application receives, so it can be switched off.
+    ///
+    /// What this cannot do is say *which end* of the pen is touching: the
+    /// proximity event that would carry that never reaches applications
+    /// (`M14t_PEN_CAPABILITIES.md`).
+    var sendsPressure: Bool = true
+
     /// Ignore finger touches while the pen is near the panel (pen spec §15).
     ///
     /// A hand resting on the screen to write with is the case this exists for.
@@ -125,6 +138,7 @@ struct PenConfiguration: Equatable, Codable {
         pointerSize = value(.pointerSize, fallback.pointerSize)
         pointerColor = value(.pointerColor, fallback.pointerColor)
         restoresPointerOnExit = value(.restoresPointerOnExit, fallback.restoresPointerOnExit)
+        sendsPressure = value(.sendsPressure, fallback.sendsPressure)
         farButton = value(.farButton, fallback.farButton)
         nearButtonHover = value(.nearButtonHover, fallback.nearButtonHover)
         nearButtonTouch = value(.nearButtonTouch, fallback.nearButtonTouch)

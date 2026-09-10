@@ -118,3 +118,78 @@ final class PenPointerTests: XCTestCase {
         }
     }
 }
+
+/// Pressure, which measurement showed applications actually receive.
+///
+/// See `M14t_PEN_CAPABILITIES.md`: a stroke marked as a tablet point arrives
+/// with its pressure intact, while an ordinary click carries only 1 or 0.
+final class PenPressureTests: XCTestCase {
+
+    private let point = CGPoint(x: 10, y: 20)
+
+    private func events(_ action: PenAction, sending: Bool = true)
+        -> [(type: CGEventType, point: CGPoint, pressure: Double?)] {
+        PenMouseBackend.mouseEvents(for: action, sendsPressure: sending)
+    }
+
+    func testSendingPressureIsOnByDefault() {
+        XCTAssertTrue(PenConfiguration().sendsPressure)
+    }
+
+    // Nothing is marked as a tablet event unless asked, so switching the setting
+    // off restores exactly the events sent before the feature existed.
+    func testNothingCarriesPressureWhenTheSettingIsOff() {
+        let actions: [PenAction] = [
+            .contactBegan(tool: .tip, position: point, pressure: 0.5),
+            .contactMoved(tool: .tip, position: point, pressure: 0.5),
+            .contactEnded(tool: .tip, position: point)
+        ]
+        for action in actions {
+            XCTAssertNil(events(action, sending: false).first?.pressure, "\(action)")
+        }
+    }
+
+    func testAStrokeCarriesThePressureItWasGiven() {
+        let began = events(.contactBegan(tool: .tip, position: point, pressure: 1.0))
+        XCTAssertEqual(began.first?.pressure, 1.0)
+    }
+
+    // Zero in a tablet event means "not touching", and the panel's lightest
+    // registering press normalises to about 0.006 — so a real touch would
+    // otherwise arrive claiming not to be one.
+    func testTheLightestTouchStillCountsAsTouching() {
+        let began = events(.contactBegan(tool: .tip, position: point, pressure: 0))
+        XCTAssertEqual(began.first?.pressure, PressureScale.minimumContactPressure)
+        XCTAssertGreaterThan(began.first?.pressure ?? 0, 0)
+    }
+
+    // Lifted is the one contact event whose honest pressure is nothing.
+    func testLiftingReportsNoPressure() {
+        XCTAssertEqual(events(.contactEnded(tool: .tip, position: point)).first?.pressure, 0)
+    }
+
+    // Light strokes must stay distinguishable rather than flattening onto one
+    // minimum, which is why the scale is lifted off zero and not clamped at it.
+    func testLightStrokesRemainDistinguishable() {
+        let soft = PressureScale.eventPressure(0.01)
+        let softer = PressureScale.eventPressure(0.005)
+        XCTAssertGreaterThan(soft, softer)
+        XCTAssertGreaterThan(softer, 0)
+    }
+
+    func testTheScaleStillReachesTheTop() {
+        XCTAssertEqual(PressureScale.eventPressure(1), 1, accuracy: 0.0001)
+    }
+
+    // A hover has no contact, so it has no pressure to report.
+    func testHoveringCarriesNoPressure() {
+        XCTAssertNil(events(.hover(position: point)).first?.pressure)
+    }
+
+    func testTheSettingSurvivesASaveAndLoad() throws {
+        var configuration = PenConfiguration()
+        configuration.sendsPressure = false
+        let data = try JSONEncoder().encode(configuration)
+        XCTAssertFalse(try JSONDecoder().decode(PenConfiguration.self, from: data).sendsPressure)
+    }
+}

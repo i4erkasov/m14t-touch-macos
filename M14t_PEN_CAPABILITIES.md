@@ -156,6 +156,40 @@ Two consequences to design around:
   today it works badly. That is a visible change and belongs in the README.
 - the seizure ends with the process, as observed when the probe exited.
 
+## Pressure reaches applications; the eraser does not
+
+Pen spec §18 asks whether applications honour synthesised tablet events. Settled
+by experiment rather than argument: a probe application was built that posts
+events to itself and prints the `NSEvent` it receives.
+
+**Pressure survives.** A mouse event with `mouseEventSubtype` set to
+`kCGEventMouseSubtypeTabletPoint` (1) and `mouseEventPressure` /
+`tabletEventPointPressure` set arrives at an ordinary Cocoa application as a
+tablet-subtype `NSEvent` with `pressure` intact:
+
+| posted | received |
+|---|---|
+| `leftMouseDown`, pressure 0.75 | `subtype=tabletPoint  pressure=0.749` |
+| `leftMouseDragged`, pressure 0.42 | `subtype=tabletPoint  pressure=0.420` |
+| `leftMouseDown`, no subtype | `subtype=mouse  pressure=1.000` |
+
+So pressure is a feature this driver can actually deliver, not merely read.
+
+**Proximity does not survive, so the eraser cannot be declared.** An application
+learns which end of the pen is in use from `NSEvent.pointingDeviceType`, which is
+carried by a `tabletProximity` event. Such an event can be built — `CGEvent.type`
+accepts `.tabletProximity`, and `tabletProximityEventPointerType` accepts the
+eraser value — but it never arrives. Checked twice, at two levels: neither the
+view's `tabletProximity(with:)` nor an `NSEvent` monitor on `.any` at the
+application level saw one, while the tablet-subtype strokes posted in the same
+run arrived normally. Setting the proximity *subtype* on a `mouseMoved` event
+instead is not delivered either.
+
+The consequence is exactly the one pen spec §27 worried about: the near button
+held during contact is a real eraser to the hardware and cannot be presented as
+one to applications. It stays what `PenTouchAction` already offers — nothing, or
+an ordinary stroke.
+
 ## What the pipeline costs, measured
 
 Written down because a guess sent this in the wrong direction once. Drawing
