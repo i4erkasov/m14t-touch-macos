@@ -217,8 +217,11 @@ extension AppController: NSMenuDelegate {
         calibrate.isEnabled = status.isConnected
         menu.addItem(calibrate)
 
+        // No ⌘, here. That shortcut belongs to an application menu, and in a
+        // status menu it only works while the menu is already open — showing a
+        // shortcut nobody can use from anywhere else.
         let settingsItem = NSMenuItem(
-            title: "Settings…", action: #selector(showSettings), keyEquivalent: ","
+            title: "Settings…", action: #selector(showSettings), keyEquivalent: ""
         )
         settingsItem.target = self
         menu.addItem(settingsItem)
