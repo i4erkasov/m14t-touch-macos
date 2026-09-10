@@ -320,6 +320,7 @@ private struct PenSettings: View {
                     Picker("Pointer", selection: pen.pointer) {
                         ForEach(PenPointerStyle.allCases, id: \.self) { Text($0.title).tag($0) }
                     }
+                    Toggle("Return the pointer when the pen leaves", isOn: pen.restoresPointerOnExit)
                     if model.settings.pen.pointer == .dot {
                         ColorPicker("Ring colour", selection: ringColor, supportsOpacity: false)
                         LabeledContent("Size") {

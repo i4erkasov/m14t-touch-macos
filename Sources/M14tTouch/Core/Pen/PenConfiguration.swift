@@ -74,6 +74,18 @@ struct PenConfiguration: Equatable, Codable {
     /// pointer disappear over anything of a similar shade.
     var pointerColor: RGBAColor = .systemGreen
 
+    /// Put the pointer back where it was when the pen leaves the panel.
+    ///
+    /// Reaching the panel means taking the pointer there — a click carries its
+    /// position — and leaving it parked on a touchscreen is not where the user
+    /// left it. The finger side already does this at the end of a gesture; for
+    /// the pen the equivalent moment is losing proximity.
+    ///
+    /// Nothing is returned if nothing was taken: the pointer is remembered at
+    /// the first move, so a pen that only hovered with hover-following off
+    /// moves nothing on the way out either.
+    var restoresPointerOnExit: Bool = true
+
     /// Ignore finger touches while the pen is near the panel (pen spec §15).
     ///
     /// A hand resting on the screen to write with is the case this exists for.
@@ -112,6 +124,7 @@ struct PenConfiguration: Equatable, Codable {
         pointer = value(.pointer, fallback.pointer)
         pointerSize = value(.pointerSize, fallback.pointerSize)
         pointerColor = value(.pointerColor, fallback.pointerColor)
+        restoresPointerOnExit = value(.restoresPointerOnExit, fallback.restoresPointerOnExit)
         farButton = value(.farButton, fallback.farButton)
         nearButtonHover = value(.nearButtonHover, fallback.nearButtonHover)
         nearButtonTouch = value(.nearButtonTouch, fallback.nearButtonTouch)

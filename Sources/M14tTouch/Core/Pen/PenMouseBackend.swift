@@ -20,6 +20,9 @@ final class PenMouseBackend: PenEventBackend {
     private var heldButtons: PenButtons = []
     private var lastPosition: CGPoint = .zero
 
+    /// Where the pointer was before the pen took it.
+    var parking = CursorParking()
+
     /// Whether the near button has been held through a contact.
     ///
     /// The near button means two things and they must not both happen. Held
@@ -56,6 +59,16 @@ final class PenMouseBackend: PenEventBackend {
             if tool == .eraser { nearButtonUsedForContact = true }
             emit(action)
 
+        case .proximityExited:
+            // Before anything else: the dot is taken down straight after this,
+            // and the arrow underneath should reappear where the user left it
+            // rather than flick across from the panel.
+            if configuration.restoresPointerOnExit {
+                parking.restore()
+            } else {
+                parking.forget()
+            }
+
         default:
             emit(action)
         }
@@ -89,8 +102,16 @@ final class PenMouseBackend: PenEventBackend {
             eraser: configuration.nearButtonTouch,
             pointerFollowsHover: configuration.pointerFollowsHover
         ) {
-            poster.post(event.type, at: event.point)
+            post(event.type, at: event.point)
         }
+    }
+
+    /// Every event this backend sends goes through here, so nothing can move the
+    /// pointer without first remembering where it was — the button presses do
+    /// not go through `emit`, and they displace it just the same.
+    private func post(_ type: CGEventType, at point: CGPoint) {
+        parking.rememberIfNeeded()
+        poster.post(type, at: point)
     }
 
     // MARK: - Mapping
@@ -141,12 +162,12 @@ final class PenMouseBackend: PenEventBackend {
 
     private func press(_ mapping: PenButtonMapping, at position: CGPoint) {
         guard let type = Self.down(mapping) else { return }
-        poster.post(type, at: position)
+        post(type, at: position)
     }
 
     private func release(_ mapping: PenButtonMapping, at position: CGPoint) {
         guard let type = Self.up(mapping) else { return }
-        poster.post(type, at: position)
+        post(type, at: position)
     }
 
     /// Down and up rather than a synthetic click pair, so holding the button

@@ -13,15 +13,11 @@ final class MouseEventEmitter: EventEmitter {
     private let poster = CGEventPoster()
 
     /// Where the pointer was before the current gesture moved it.
-    ///
-    /// Captured at the moment of the first move rather than when the finger
-    /// lands, because until then nothing has displaced it and there is nothing
-    /// to remember.
-    private var parkedCursor: CGPoint?
+    var parking = CursorParking()
 
     func emit(_ action: InputAction) {
         if case .cursorRestore = action {
-            restoreCursor()
+            parking.restore()
             return
         }
 
@@ -31,21 +27,10 @@ final class MouseEventEmitter: EventEmitter {
             return
         }
 
-        if parkedCursor == nil, let current = CGEvent(source: nil)?.location {
-            parkedCursor = current
-        }
+        parking.rememberIfNeeded()
         for event in events {
             poster.post(event.type, at: event.point)
         }
-    }
-
-    private func restoreCursor() {
-        guard let parked = parkedCursor else { return }
-        parkedCursor = nil
-        CGWarpMouseCursorPosition(parked)
-        // Without this the hardware mouse stays decoupled from the pointer and
-        // the next trackpad movement snaps it back to where the warp came from.
-        CGAssociateMouseAndMouseCursorPosition(1)
     }
 
     /// The mouse events an action maps to, in order. Empty when this emitter
