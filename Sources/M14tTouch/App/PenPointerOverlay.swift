@@ -44,6 +44,7 @@ final class PenPointerOverlay: PenPointerDisplay {
     private var diameter: CGFloat = 14
     private var ringColor: RGBAColor = .systemGreen
     private var hasReportedAppearance = false
+    private var hasWarmed = false
 
     init(cursorVisibility: CursorVisibilityController) {
         self.cursorVisibility = cursorVisibility
@@ -59,6 +60,15 @@ final class PenPointerOverlay: PenPointerDisplay {
 
         diameter = CGFloat(configuration.pointerSize)
         ringColor = configuration.pointerColor
+
+        // Built now rather than on the first pen sample. Measured: constructing
+        // this window costs 28 ms and showing it for the first time another 3,
+        // all on the main thread — which the first stroke after a launch was
+        // paying, and which is what made the pen stutter until it had.
+        if wanted {
+            _ = window ?? makeWindow()
+            warmUp()
+        }
         styleDot()
 
         if changed {
@@ -155,6 +165,21 @@ final class PenPointerOverlay: PenPointerDisplay {
     private func conceal() {
         window?.orderOut(nil)
         hasReportedAppearance = false
+    }
+
+    /// Pay the cost of the first appearance now, invisibly.
+    ///
+    /// The compositor allocates a window's surface when it is first shown, and
+    /// that is a one-off: measured at 3 ms the first time and 0.1 ms every time
+    /// after. Doing it at alpha zero means nothing appears on screen.
+    private func warmUp() {
+        guard !hasWarmed, let window else { return }
+        hasWarmed = true
+        let alpha = window.alphaValue
+        window.alphaValue = 0
+        window.orderFrontRegardless()
+        window.orderOut(nil)
+        window.alphaValue = alpha
     }
 
     private func makeWindow() -> NSPanel {

@@ -224,6 +224,22 @@ returning the pointer costs 80 µs *once*. Nothing here is a throughput problem,
 and the release loop — which looked alarming, since hover accumulates one hide
 per sample — is 14 ms after half a minute of hovering.
 
+The one thing on this path that *is* expensive is building the dot's window,
+and it is expensive once:
+
+| Step | First time | Every time after |
+|---|---|---|
+| Construct the overlay window | 27.7 ms | — |
+| Show it | 3.2 ms | 0.11 ms |
+| Hide it | 1.1 ms | 0.19 ms |
+| Move it | — | 0.07 ms |
+| Resolve the private cursor symbols | 0.06 ms | — |
+
+31 ms on the main thread is about six pen samples, and it was being paid by the
+first stroke after every launch — which is exactly what a stutter that clears up
+on its own looks like. The window is now built when the setting is applied, and
+its first appearance is spent at alpha zero.
+
 What the delayed return actually fixed was **visible**, not temporal: the pen
 loses proximity on every lift between strokes, so the pointer was teleporting
 across the desk and back after each stroke. Before optimising this path, measure
