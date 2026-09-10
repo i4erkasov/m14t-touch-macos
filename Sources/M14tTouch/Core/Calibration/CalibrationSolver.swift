@@ -30,6 +30,26 @@ struct CalibrationResult: Equatable {
     let worstError: Double
 }
 
+extension CalibrationResult {
+
+    /// Where a raw coordinate lands, as a fraction of the display.
+    ///
+    /// The same arithmetic `CoordinateMapper` does, stopping one step earlier:
+    /// verification draws in the overlay's own coordinates, and going out to
+    /// screen pixels and back would only add a chance to disagree.
+    func fraction(of raw: CGPoint) -> CGPoint {
+        func ratio(_ value: Double, _ low: Double, _ high: Double, inverted: Bool) -> Double {
+            guard high > low else { return 0 }
+            let r = min(max((value - low) / (high - low), 0), 1)
+            return inverted ? 1 - r : r
+        }
+        return CGPoint(
+            x: ratio(raw.x, calibration.xMin, calibration.xMax, inverted: invertX),
+            y: ratio(raw.y, calibration.yMin, calibration.yMax, inverted: invertY)
+        )
+    }
+}
+
 /// Turns touched targets into a coordinate range (spec §16).
 ///
 /// The improvement over watching values go by is that these targets are at

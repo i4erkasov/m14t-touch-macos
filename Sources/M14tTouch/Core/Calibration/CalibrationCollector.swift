@@ -10,7 +10,7 @@ import Foundation
 /// samples fit and the verification screen shows the result, which is a better
 /// feedback loop than arguing with the user about one target: they see what they
 /// got and redo the set.
-struct CalibrationCollector {
+struct CalibrationCollector: Equatable {
 
     /// Where the targets sit, as fractions of the display.
     ///
