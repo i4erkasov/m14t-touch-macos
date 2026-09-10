@@ -28,6 +28,10 @@ final class SettingsModel: ObservableObject {
     /// The calibration in force, shown read-only until v0.4 gives it a UI.
     @Published private(set) var calibration: CalibrationData?
 
+    /// Which permissions are missing, re-read rather than remembered: the user
+    /// grants them in another application, so nothing tells us when it changes.
+    @Published private(set) var permissions: [Permission: Bool] = [:]
+
     private let store: SettingsStore
     private let apply: (AppSettings) -> Void
     private let calibrationStore: CalibrationStore
@@ -51,6 +55,19 @@ final class SettingsModel: ObservableObject {
     func refresh() {
         displays = DisplayResolver.all()
         calibration = calibrationStore.load()
+        permissions = Dictionary(
+            uniqueKeysWithValues: Permission.allCases.map { ($0, PermissionsManager.isGranted($0)) }
+        )
+    }
+
+    func isGranted(_ permission: Permission) -> Bool { permissions[permission] ?? false }
+
+    func grant(_ permission: Permission) {
+        // Ask first, then show the pane: the prompt appears at most once per
+        // application and never after a refusal, so it cannot be relied on
+        // alone, but it is the shorter path when it does appear.
+        PermissionsManager.request(permission)
+        PermissionsManager.openSettings(for: permission)
     }
 
     func update(status: DriverStatus) {

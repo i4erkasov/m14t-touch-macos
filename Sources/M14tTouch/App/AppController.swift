@@ -65,6 +65,13 @@ final class AppController: NSObject, NSApplicationDelegate {
             }
         }
 
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(applicationBecameActive),
+            name: NSApplication.didBecomeActiveNotification,
+            object: nil
+        )
+
         driver.setEnabled(settings.enabled)
         driver.start()
         updateStatusItemAppearance()
@@ -99,6 +106,12 @@ final class AppController: NSObject, NSApplicationDelegate {
         driver.setMode(mode)
         persist()
         settingsModel?.settings.mode = mode
+    }
+
+    /// The user grants permissions in System Settings and comes back; nothing
+    /// notifies us, so returning to the front is the cue to look again.
+    @objc private func applicationBecameActive() {
+        settingsModel?.refresh()
     }
 
     @objc private func showSettings() {

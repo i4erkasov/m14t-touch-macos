@@ -34,6 +34,26 @@ private struct GeneralTab: View {
                 }
             }
 
+            Section("Permissions") {
+                ForEach(Permission.allCases, id: \.self) { permission in
+                    LabeledContent {
+                        if model.isGranted(permission) {
+                            Label("Granted", systemImage: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                        } else {
+                            Button("Grant…") { model.grant(permission) }
+                        }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(permission.title)
+                            Text(permission.explanation)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+
             Section("Target display") {
                 // Listed rather than typed as an index: the number means nothing
                 // to anyone, and it changes when monitors are replugged.
