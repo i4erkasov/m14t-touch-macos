@@ -25,6 +25,13 @@ final class AppController: NSObject, NSApplicationDelegate {
     private var settingsModel: SettingsModel?
     private lazy var calibrationOverlay = CalibrationOverlayController(driver: driver)
 
+    /// The dot the pen draws instead of the arrow, when asked for.
+    ///
+    /// Lives here rather than in the driver because it is a window, and the
+    /// driver is deliberately free of AppKit — the CLI runs the same driver with
+    /// no application around it.
+    private lazy var penPointer = PenPointerOverlay(cursorVisibility: cursorVisibility)
+
     init(
         driver: HIDTouchDriver,
         cursorVisibility: CursorVisibilityController,
@@ -81,6 +88,9 @@ final class AppController: NSObject, NSApplicationDelegate {
             PermissionsManager.request(.inputMonitoring)
         }
 
+        penPointer.apply(settings.pen)
+        driver.setPenPointer(penPointer)
+
         driver.setEnabled(settings.enabled)
         driver.start()
         updateStatusItemAppearance()
@@ -127,6 +137,7 @@ final class AppController: NSObject, NSApplicationDelegate {
             self.settings.invertY = result.invertY
             self.persist()
             self.driver.apply(self.settings)
+            self.penPointer.apply(self.settings.pen)
             self.settingsModel?.settings = self.settings
             self.settingsModel?.refresh()
         }
@@ -207,6 +218,7 @@ final class AppController: NSObject, NSApplicationDelegate {
                 // menu and the running driver both follow it.
                 self.settings = updated
                 self.driver.apply(updated)
+                self.penPointer.apply(updated.pen)
                 self.cursorVisibility.setPolicy(updated.gestures.cursorHiding)
                 self.updateStatusItemAppearance()
             }

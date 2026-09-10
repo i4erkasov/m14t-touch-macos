@@ -54,6 +54,18 @@ struct PenConfiguration: Equatable, Codable {
     /// actually touches.
     var pointerFollowsHover: Bool = true
 
+    /// What the user sees following the pen.
+    ///
+    /// The arrow by default, because the alternative depends on being able to
+    /// hide the system pointer, and that needs the private call the amendment
+    /// allows — which may be unavailable. Choosing the dot when nothing can be
+    /// hidden would put two pointers on screen, so the honest default is the
+    /// behaviour that always works.
+    var pointer: PenPointerStyle = .arrow
+
+    /// How big the drawn dot is, in points.
+    var pointerSize: Double = 14
+
     /// Ignore finger touches while the pen is near the panel (pen spec §15).
     ///
     /// A hand resting on the screen to write with is the case this exists for.
@@ -89,6 +101,8 @@ struct PenConfiguration: Equatable, Codable {
         }
         pointerFollowsHover = value(.pointerFollowsHover, fallback.pointerFollowsHover)
         palmRejection = value(.palmRejection, fallback.palmRejection)
+        pointer = value(.pointer, fallback.pointer)
+        pointerSize = value(.pointerSize, fallback.pointerSize)
         farButton = value(.farButton, fallback.farButton)
         nearButtonHover = value(.nearButtonHover, fallback.nearButtonHover)
         nearButtonTouch = value(.nearButtonTouch, fallback.nearButtonTouch)

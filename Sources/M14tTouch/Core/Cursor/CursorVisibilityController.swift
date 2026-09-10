@@ -19,6 +19,16 @@ final class CursorVisibilityController {
     private var policy: CursorHiding
     private var isHiding = false
 
+    /// The two things that independently want the pointer gone.
+    ///
+    /// Kept apart and combined rather than sharing one flag, because either can
+    /// stop wanting it while the other still does — a finger lifting during a
+    /// pen stroke would otherwise give the arrow back on top of the dot. The
+    /// underlying `release()` undoes every assertion at once, so there can only
+    /// be one caller of it, and this is it.
+    private var fingerWantsHiding = false
+    private var penWantsHiding = false
+
     init(policy: CursorHiding, visibility: CursorVisibility) {
         self.policy = policy
         self.visibility = visibility
@@ -50,21 +60,41 @@ final class CursorVisibilityController {
     /// - Parameter isScrolling: whether the gesture has committed to scrolling.
     ///   Only meaningful for the `.scrolling` policy.
     func update(isTouching: Bool, isScrolling: Bool) {
-        lock.lock()
-        let active = policy.hidesAnything && visibility.isAvailable
-        let wanted: Bool
-        switch policy {
-        case .never:     wanted = false
-        case .scrolling: wanted = active && isTouching && isScrolling
-        case .touching:  wanted = active && isTouching
+        settle {
+            let active = self.policy.hidesAnything && self.visibility.isAvailable
+            switch self.policy {
+            case .never:     self.fingerWantsHiding = false
+            case .scrolling: self.fingerWantsHiding = active && isTouching && isScrolling
+            case .touching:  self.fingerWantsHiding = active && isTouching
+            }
         }
+    }
+
+    /// Follow the pen's own pointer.
+    ///
+    /// Independent of the hiding policy, which is about fingers: a drawn pointer
+    /// is not a policy about when to hide the arrow, it is a replacement for it,
+    /// and leaving both on screen would be the one outcome nobody asked for.
+    ///
+    /// Called once per pen sample while the dot is up, for the same reason the
+    /// finger path is: the window server does not honour a single request.
+    func updatePenPointer(isDrawn: Bool) {
+        settle { self.penWantsHiding = isDrawn && self.visibility.isAvailable }
+    }
+
+    /// Apply a change to what is wanted, then make the world match it.
+    ///
+    /// The CoreGraphics calls are made outside the lock: they reach into the
+    /// window server, and holding a lock across that would put it on the
+    /// critical path of every frame.
+    private func settle(_ change: () -> Void) {
+        lock.lock()
+        change()
+        let wanted = fingerWantsHiding || penWantsHiding
         let shouldRelease = !wanted && isHiding
         isHiding = wanted
         lock.unlock()
 
-        // The calls themselves are made outside the lock: they reach into
-        // CoreGraphics, and holding a lock across that would put the window
-        // server on the critical path of every frame.
         if wanted {
             visibility.assertHidden()
         } else if shouldRelease {
@@ -80,6 +110,8 @@ final class CursorVisibilityController {
     func restore() {
         lock.lock()
         isHiding = false
+        fingerWantsHiding = false
+        penWantsHiding = false
         lock.unlock()
         visibility.release()
     }

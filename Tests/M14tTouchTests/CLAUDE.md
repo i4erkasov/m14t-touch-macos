@@ -107,6 +107,11 @@ IOHIDManager -> HIDTouchDriver -> TouchFrame -> GestureRecognizer -> InputAction
 | `Core/Events/MouseEventEmitter.swift` | `InputAction` -> `CGEventType`, cursor parking |
 | `Core/Events/ScrollEventEmitter.swift` | Pixel-unit scroll wheel events |
 | `Core/Events/CGEventPoster.swift` | `CGEvent` posting |
+| `Core/Cursor/CursorVisibilityController.swift` | Balances hide/show for finger and pen |
+| `Core/Pen/PenRecognizer.swift` | Raw pen samples -> `PenAction` |
+| `Core/Pen/PenMouseBackend.swift` | `PenAction` -> mouse events |
+| `App/PenPointerOverlay.swift` | The dot drawn in place of the arrow |
+| `Core/Diagnostics/Log.swift` | stdout *and* the unified log, for the bundle |
 
 Keep these layers separate: HID acquisition, mapping, calibration, gesture
 recognition, event emission, UI, persistence.
@@ -124,7 +129,16 @@ assumption, and both worth knowing before promising them:
   the cursor is placed on the target once per gesture and restored afterwards.
 - *Hide the cursor.* `NSCursor.hide` and `CGDisplayHideCursor` act only while the
   calling app is frontmost, which never happens here. Doing it from the
-  background needs a private API that spec §10 and §32 forbid by name.
+  background needs a private API, which the spec amendment now permits **for
+  this and nothing else** — see the hard rules. It is quarantined in
+  `Core/Cursor/PrivateCursorVisibility.swift`, resolved through `dlsym` so a
+  missing symbol degrades instead of failing to launch, and a single hide only
+  blinks: the window server drops it the moment the pointer moves, so it must be
+  re-asserted every frame.
+- *Replace another application's cursor image.* `NSCursor` applies only over the
+  setting application's own windows while it is frontmost. The pen's dot is
+  therefore drawn in an overlay window (`App/PenPointerOverlay.swift`) with the
+  arrow hidden underneath, not by changing the system cursor.
 
 Calibration precedence: manual flags > saved `~/.m14ttouch.json` > HID descriptor.
 
@@ -157,7 +171,12 @@ behaviours the refactor preserves.
 
 ## Hard rules (spec §32)
 
-- No kernel extensions, no System Extensions, no private macOS APIs.
+- No kernel extensions, no System Extensions, no private macOS APIs — with one
+  exception the user added to the spec: private CoreGraphics/WindowServer calls
+  may be used **only** to hide and show the system cursor, only in an isolated
+  component, only behind an on/off setting, and only if the app still works when
+  the symbols are missing and always gives the pointer back. Never for HID,
+  gestures or event injection.
 - No third-party dependencies without a strong reason.
 - Deployment target macOS 13+ unless a newer API is a major win.
 - SwiftUI for UI; AppKit/CoreGraphics/IOKit where required.

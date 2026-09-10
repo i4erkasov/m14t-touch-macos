@@ -45,7 +45,7 @@ final class PenMouseBackend: PenEventBackend {
     }
 
     func handle(_ action: PenAction) {
-        if let position = Self.position(of: action) { lastPosition = position }
+        if let position = action.position { lastPosition = position }
 
         switch action {
         case .buttonsChanged(let buttons, let position):
@@ -178,14 +178,4 @@ final class PenMouseBackend: PenEventBackend {
         }
     }
 
-    private static func position(of action: PenAction) -> CGPoint? {
-        switch action {
-        case .proximityEntered(let p), .hover(let p),
-             .contactBegan(_, let p, _), .contactMoved(_, let p, _),
-             .contactEnded(_, let p), .buttonsChanged(_, let p):
-            return p
-        case .proximityExited:
-            return nil
-        }
-    }
 }

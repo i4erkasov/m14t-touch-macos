@@ -123,6 +123,84 @@ final class CursorVisibilityTests: XCTestCase {
         XCTAssertFalse(PublicCursorVisibility().isAvailable)
     }
 
+    // MARK: - The pen's own pointer
+
+    // Same reason as a finger: the window server stops honouring a hide as soon
+    // as the pointer moves, and the pen moves it constantly.
+    func testEveryPenSampleAssertsAHide() {
+        let (controller, spy) = makeController(policy: .never)
+        for _ in 0..<5 { controller.updatePenPointer(isDrawn: true) }
+        XCTAssertEqual(spy.assertions, 5)
+        XCTAssertEqual(spy.releases, 0)
+    }
+
+    func testThePenGivesThePointerBackWhenItLeaves() {
+        let (controller, spy) = makeController(policy: .never)
+        controller.updatePenPointer(isDrawn: true)
+        controller.updatePenPointer(isDrawn: false)
+        XCTAssertEqual(spy.releases, 1)
+    }
+
+    // A drawn pointer is a replacement for the arrow, not a policy about when to
+    // hide it, so the finger setting has no say.
+    func testThePenHidesEvenWhenTheFingerPolicyIsNever() {
+        let (controller, spy) = makeController(policy: .never)
+        controller.updatePenPointer(isDrawn: true)
+        XCTAssertEqual(spy.assertions, 1)
+    }
+
+    // The bug this guards: with one shared flag, a palm lifting off the panel
+    // mid-stroke would hand the arrow back on top of the dot.
+    func testAFingerLiftingDoesNotUncoverTheDot() {
+        let (controller, spy) = makeController(policy: .touching)
+        controller.update(isTouching: true, isScrolling: false)
+        controller.updatePenPointer(isDrawn: true)
+        spy.forgetCounts()
+
+        controller.update(isTouching: false, isScrolling: false)
+        XCTAssertEqual(spy.releases, 0)
+    }
+
+    // And the other way round, which is the case that actually happens: the pen
+    // leaves while a finger is still down.
+    func testThePenLeavingDoesNotUncoverAFinger() {
+        let (controller, spy) = makeController(policy: .touching)
+        controller.updatePenPointer(isDrawn: true)
+        controller.update(isTouching: true, isScrolling: false)
+        spy.forgetCounts()
+
+        controller.updatePenPointer(isDrawn: false)
+        XCTAssertEqual(spy.releases, 0)
+    }
+
+    // Both gone, and only then.
+    func testThePointerComesBackOnceNeitherWantsItHidden() {
+        let (controller, spy) = makeController(policy: .touching)
+        controller.update(isTouching: true, isScrolling: false)
+        controller.updatePenPointer(isDrawn: true)
+        controller.update(isTouching: false, isScrolling: false)
+        controller.updatePenPointer(isDrawn: false)
+        XCTAssertEqual(spy.releases, 1)
+    }
+
+    func testThePenCannotHideWhatTheImplementationCannotHide() {
+        let (controller, spy) = makeController(policy: .never, available: false)
+        controller.updatePenPointer(isDrawn: true)
+        XCTAssertEqual(spy.assertions, 0)
+    }
+
+    // Shutdown forgets both wants, or the next idle frame would release again
+    // against a pointer nobody is hiding.
+    func testRestoreForgetsThePenToo() {
+        let (controller, spy) = makeController(policy: .touching)
+        controller.updatePenPointer(isDrawn: true)
+        controller.restore()
+        spy.forgetCounts()
+
+        controller.update(isTouching: false, isScrolling: false)
+        XCTAssertEqual(spy.releases, 0)
+    }
+
     // MARK: - Policy
 
     // The mode that actually works: during a scroll the pointer is placed once

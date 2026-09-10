@@ -97,6 +97,13 @@ final class HIDTouchDriver {
     private var penMapper: CoordinateMapper
     private var pen = PenRecognizer()
     private let penBackend = PenMouseBackend()
+
+    /// Where the pen's own pointer is drawn, when the user asked for one.
+    ///
+    /// Set by the application, which owns the window; the CLI leaves it nil and
+    /// nothing here notices. Read on the touch queue and written from the main
+    /// thread, so it is set through the queue rather than assigned directly.
+    private var penPointer: PenPointerDisplay?
     private let penPressure = PressureScale.m14t
 
     private var penRawX: Double = 0
@@ -265,6 +272,15 @@ final class HIDTouchDriver {
             : "✅ Listening for touch device…")
     }
 
+    /// Attach the pointer the pen draws for itself, from any thread.
+    ///
+    /// Nil is a valid answer and means the system arrow, which is what the CLI
+    /// always gets: an overlay window needs an application, and the CLI is not
+    /// one.
+    func setPenPointer(_ pointer: PenPointerDisplay?) {
+        queue.async { [weak self] in self?.penPointer = pointer }
+    }
+
     /// Turn translation on or off, from any thread.
     ///
     /// Asynchronous on purpose: a menu click must not wait on the touch queue,
@@ -342,7 +358,7 @@ final class HIDTouchDriver {
         queue.sync {
             isTipSwitchDown = false
             logActions(engine.reset())
-            for action in pen.reset() { penBackend.handle(action) }
+            for action in pen.reset() { dispatch(action) }
 
             guard let manager else { return }
             // Cancel rather than close: the queue-based API requires it, and it
@@ -382,7 +398,7 @@ final class HIDTouchDriver {
 
         // The pen too: a stroke that never ends leaves a button pressed with no
         // pen left to lift it (pen spec §35).
-        for action in pen.reset() { penBackend.handle(action) }
+        for action in pen.reset() { dispatch(action) }
         penInRange = false
         penTipDown = false
         penEraserDown = false
@@ -611,7 +627,25 @@ final class HIDTouchDriver {
                 // either a light touch or a floor set too high.
                 log("✒️  \(action)   [rawPressure \(Int(penPressureRaw))]")
             }
-            penBackend.handle(action)
+            dispatch(action)
+        }
+    }
+
+    /// Send one pen action everywhere it has to go.
+    ///
+    /// A single funnel because there are three callers — the sample loop, the
+    /// reset on disconnect and the reset on stop — and a drawn pointer left up
+    /// after the device disappeared would be a dot floating over a driver that
+    /// is no longer running.
+    private func dispatch(_ action: PenAction) {
+        penBackend.handle(action)
+        // After the backend, not before: the pointer the dot stands in for has
+        // already been moved by then, so the two land together rather than the
+        // drawing leading the thing it represents.
+        if let position = action.position {
+            penPointer?.moved(to: position)
+        } else if case .proximityExited = action {
+            penPointer?.left()
         }
     }
 

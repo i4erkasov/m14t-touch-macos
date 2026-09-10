@@ -30,3 +30,23 @@ enum PenAction: Equatable {
     /// act on combinations without tracking state of its own.
     case buttonsChanged(PenButtons, position: CGPoint)
 }
+
+extension PenAction {
+
+    /// Where on screen the action happened, or nil for the one action that has
+    /// no place — the pen leaving.
+    ///
+    /// On the action rather than on a backend because more than one thing needs
+    /// it now: the mouse backend, to remember where a button was pressed, and
+    /// the drawn pointer, to know where to put itself.
+    var position: CGPoint? {
+        switch self {
+        case .proximityEntered(let p), .hover(let p),
+             .contactBegan(_, let p, _), .contactMoved(_, let p, _),
+             .contactEnded(_, let p), .buttonsChanged(_, let p):
+            return p
+        case .proximityExited:
+            return nil
+        }
+    }
+}

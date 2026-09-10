@@ -306,6 +306,30 @@ private struct PenSettings: View {
                 }
 
                 Section {
+                    Picker("Pointer", selection: pen.pointer) {
+                        ForEach(PenPointerStyle.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    if model.settings.pen.pointer == .dot {
+                        LabeledContent("Size") {
+                            Slider(value: pen.pointerSize, in: 6...32, step: 1) {
+                                Text("Size")
+                            } minimumValueLabel: {
+                                Text("6")
+                            } maximumValueLabel: {
+                                Text("32")
+                            }
+                            .labelsHidden()
+                        }
+                    }
+                } header: {
+                    Text("Pointer")
+                } footer: {
+                    Text(model.settings.pen.pointer == .dot
+                         ? "The dot is drawn over everything and the system arrow is hidden while the pen is near. Hiding the arrow needs the same facility as Touch → Cursor; where that is unavailable, both are visible."
+                         : "The pointer macOS would show anyway.")
+                }
+
+                Section {
                     Toggle("Ignore touches while the pen is near", isOn: pen.palmRejection)
                 } header: {
                     Text("Palm rejection")
