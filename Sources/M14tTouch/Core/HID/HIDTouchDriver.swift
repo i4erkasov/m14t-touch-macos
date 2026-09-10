@@ -45,6 +45,18 @@ final class HIDTouchDriver {
     // IOKit
     private var manager: IOHIDManager?
 
+    /// Called on the **main queue** whenever the connected device changes, so a
+    /// menu can show it without reaching into the driver's queue.
+    var onStatusChange: ((DriverStatus) -> Void)?
+
+    private var status = DriverStatus() {
+        didSet {
+            guard status != oldValue else { return }
+            let published = status
+            DispatchQueue.main.async { [weak self] in self?.onStatusChange?(published) }
+        }
+    }
+
     /// The queue every callback and all mutable state lives on.
     ///
     /// `userInteractive` because this is the latency path: a frame late is a
@@ -154,6 +166,24 @@ final class HIDTouchDriver {
         log("✅ Listening for touch device…")
     }
 
+    /// Turn translation on or off, from any thread.
+    ///
+    /// Asynchronous on purpose: a menu click must not wait on the touch queue,
+    /// which may be mid-frame.
+    func setEnabled(_ enabled: Bool) {
+        queue.async { [weak self] in self?.engine.setEnabled(enabled) }
+    }
+
+    /// Switch gesture model without restarting, from any thread.
+    func setMode(_ mode: TouchMode) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.config.mode = mode
+            self.engine.setRecognizer(mode.makeRecognizer(config: self.config))
+            self.log("🎛️  Mode: \(mode.rawValue)")
+        }
+    }
+
     /// Release any contact in progress and close the device.
     ///
     /// Quitting while a finger is down would otherwise leave the left button
@@ -188,6 +218,7 @@ final class HIDTouchDriver {
         let vendor  = IOHIDDeviceGetProperty(device, kIOHIDVendorIDKey  as CFString) as? Int ?? 0
         let product = IOHIDDeviceGetProperty(device, kIOHIDProductIDKey as CFString) as? Int ?? 0
         log("🔌 Connected: \"\(name)\"  VID 0x\(hex(vendor))  PID 0x\(hex(product))")
+        status = DriverStatus(isConnected: true, deviceName: name)
     }
 
     private func deviceRemoved() {
@@ -197,6 +228,7 @@ final class HIDTouchDriver {
         logActions(engine.reset())
         // Re-derive calibration from whichever device speaks up next.
         calibratedDevice = nil
+        status = DriverStatus()
     }
 
     // MARK: - Calibration

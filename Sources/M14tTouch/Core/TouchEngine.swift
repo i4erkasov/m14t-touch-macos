@@ -13,6 +13,12 @@ final class TouchEngine {
     private let emitter: EventEmitter
     private let cursorVisibility: CursorVisibilityController
 
+    /// Whether touch is being translated at all — the menu's "Enable touch".
+    ///
+    /// Queue-confined like everything else here; the app changes it through the
+    /// driver, which hops onto the queue to do so.
+    private var isEnabled = true
+
     /// Whether the gesture in progress has committed to scrolling.
     ///
     /// Read from the actions rather than asked of the recognizer, so mouse mode
@@ -40,6 +46,8 @@ final class TouchEngine {
     /// about logging.
     @discardableResult
     func process(_ frame: TouchFrame) -> [InputAction] {
+        guard isEnabled else { return [] }
+
         let isTouching = frame.primaryContact?.isTouching ?? false
         if !isTouching { isScrolling = false }
 
@@ -53,6 +61,28 @@ final class TouchEngine {
         }
         actions.forEach(emitter.emit)
         return actions
+    }
+
+    /// Turn translation on or off.
+    ///
+    /// Switching off abandons whatever is in progress rather than freezing it:
+    /// a gesture interrupted halfway must not leave a button held or the pointer
+    /// hidden, and resuming into the middle of a gesture whose finger has long
+    /// since lifted would be worse than starting fresh.
+    func setEnabled(_ enabled: Bool) {
+        guard enabled != isEnabled else { return }
+        if !enabled { reset() }
+        isEnabled = enabled
+    }
+
+    /// Swap the gesture model without restarting the driver.
+    ///
+    /// The outgoing recognizer is reset first, for the same reason: its state
+    /// describes a gesture the new one knows nothing about, and anything it is
+    /// holding has to be given back before it is discarded.
+    func setRecognizer(_ replacement: any GestureRecognizer) {
+        reset()
+        recognizer = replacement
     }
 
     /// Abandon any gesture in progress, emitting whatever is needed to leave the

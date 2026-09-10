@@ -111,7 +111,8 @@ case .runApp(let config):
     let (engine, cursorVisibility) = makeEngine(for: config)
     let controller = AppController(
         driver: HIDTouchDriver(config: config, engine: engine),
-        cursorVisibility: cursorVisibility
+        cursorVisibility: cursorVisibility,
+        settings: storedSettings
     )
     let app = NSApplication.shared
     app.delegate = controller
