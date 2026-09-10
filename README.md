@@ -187,11 +187,57 @@ for the other. Two consequences worth knowing before they waste your time:
 
 - **Copy the app somewhere permanent before granting.** Permission follows the
   path, so an app granted in `build/` loses it on the next rebuild.
-- **Rebuilding can revoke it.** The bundle is signed ad-hoc, so its signature
-  changes with the binary and macOS may treat the rebuilt app as a stranger. If
-  the app stops working after a rebuild, remove it from both panes and add it
-  again. This is why development is better done against the command-line build,
-  which keeps its grants.
+- **Sign it, or rebuilding revokes it.** macOS keys the grant on the bundle's
+  designated requirement. An ad-hoc signature has no identity, so that
+  requirement pins the binary's exact bytes and every rebuild is a new
+  application that has to be granted again. Run this once:
+
+  ```bash
+  ./scripts/make-signing-identity.sh
+  ```
+
+  It creates a self-signed code-signing certificate and trusts it locally.
+  `package-app.sh` then signs with it, the requirement becomes `identifier
+  "com.m14ttouch.app" and certificate leaf = H"…"`, and later builds satisfy it
+  too. The certificate is trusted only on this machine and means nothing
+  anywhere else.
+
+When the app cannot work, it says which permission is missing rather than only
+"Not connected", and the menu line opens that pane. If something is still
+unclear, the driver narrates to the system log, which is readable even for a
+bundle launched from Finder:
+
+```bash
+log show --last 5m --predicate 'subsystem == "com.m14ttouch.app"' --info
+```
+
+
+## Sharing it with someone else
+
+```bash
+./scripts/make-dmg.sh
+```
+
+This produces `build/M14t-Touch-<version>.dmg` containing a **universal** build
+(Apple Silicon and Intel), a shortcut to Applications, and a first-run note.
+
+**The one thing to warn them about.** The app is not notarized, and macOS
+refuses to run unnotarized code that arrived with a quarantine attribute —
+which anything downloaded has. This is not about how the app is signed: an
+ad-hoc build, a self-signed build and a build signed by a certificate the Mac
+does not trust are all killed identically, and all three run once the attribute
+is gone. So the recipient does one of these, once:
+
+- **Privacy & Security → Open Anyway**, after the first refusal, or
+- `xattr -dr com.apple.quarantine "/Applications/M14t Touch.app"`
+
+Then Input Monitoring and Accessibility, as above. Sending them a later build
+signed with the same certificate keeps those grants: the designated requirement
+does not change.
+
+Removing that step entirely needs a Developer ID from the Apple Developer
+Program (99 USD/year) and notarization — nothing in the build stands in the way,
+it is only the certificate that is missing.
 
 
 ## Calibration

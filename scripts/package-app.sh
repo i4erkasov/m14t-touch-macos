@@ -17,9 +17,19 @@ DESTINATION="build/${APP_NAME}.app"
 
 VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo "0.3.0-dev")"
 
+# A release goes to other people's Macs, which are not all Apple Silicon, so it
+# is built for both architectures. A debug build is for this machine and is
+# built natively, because doubling its build time to produce a slice nobody runs
+# would only slow the edit-run loop down.
+if [ "$CONFIGURATION" = "release" ]; then
+    ARCHS=(--arch arm64 --arch x86_64)
+else
+    ARCHS=()
+fi
+
 printf '\033[1mBuilding (%s)\033[0m\n' "$CONFIGURATION"
-swift build -c "$CONFIGURATION"
-BINARY="$(swift build -c "$CONFIGURATION" --show-bin-path)/m14ttouch"
+swift build -c "$CONFIGURATION" "${ARCHS[@]+"${ARCHS[@]}"}"
+BINARY="$(swift build -c "$CONFIGURATION" "${ARCHS[@]+"${ARCHS[@]}"}" --show-bin-path)/m14ttouch"
 [ -x "$BINARY" ] || { echo "no binary at $BINARY" >&2; exit 1; }
 
 printf '\033[1mAssembling %s\033[0m\n' "$DESTINATION"
@@ -69,4 +79,5 @@ echo "  Run it:      open \"$DESTINATION\""
 echo "  Install it:  cp -R \"$DESTINATION\" ~/Applications/"
 echo
 echo "  It needs Input Monitoring and Accessibility granted to the app itself;"
-echo "  the terminal's existing grants do not carry over to a new bundle."
+echo "  the terminal's existing grants belong to a different binary. With a"
+echo "  signing identity they are granted once and survive later builds."
