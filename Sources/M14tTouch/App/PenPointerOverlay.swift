@@ -33,6 +33,7 @@ final class PenPointerOverlay: PenPointerDisplay {
     private var window: NSPanel?
     private var dot: CALayer?
     private var diameter: CGFloat = 14
+    private var hasReportedAppearance = false
 
     init(cursorVisibility: CursorVisibilityController) {
         self.cursorVisibility = cursorVisibility
@@ -48,6 +49,9 @@ final class PenPointerOverlay: PenPointerDisplay {
 
         diameter = CGFloat(configuration.pointerSize)
         resizeDot()
+        if changed {
+            Log.line("✒️  Pen pointer: \(configuration.pointer.rawValue)")
+        }
 
         // Switching the dot off has to take it away now. Waiting for the next
         // pen sample would leave it on screen for as long as the pen stays away,
@@ -132,10 +136,23 @@ final class PenPointerOverlay: PenPointerDisplay {
         CATransaction.commit()
 
         if !window.isVisible { window.orderFrontRegardless() }
+
+        // Said once per appearance, because an overlay that fails to appear is
+        // otherwise silent: there is no error to catch, just nothing on screen.
+        if !hasReportedAppearance {
+            hasReportedAppearance = true
+            Log.line("""
+                ✒️  Pen dot shown at (\(Int(dot.position.x)), \(Int(dot.position.y))) \
+                in window \(Int(frame.width))×\(Int(frame.height)) @ \
+                (\(Int(frame.minX)),\(Int(frame.minY))), visible=\(window.isVisible), \
+                size=\(Int(diameter))
+                """)
+        }
     }
 
     private func conceal() {
         window?.orderOut(nil)
+        hasReportedAppearance = false
     }
 
     private func makeWindow() -> NSPanel {
@@ -149,6 +166,10 @@ final class PenPointerOverlay: PenPointerDisplay {
         panel.backgroundColor = .clear
         panel.hasShadow = false
         panel.isReleasedWhenClosed = false
+        // An NSPanel hides itself whenever its application is not active, and a
+        // menu-bar accessory is almost never active — the dot would have been
+        // ordered in and taken straight back out again, every time.
+        panel.hidesOnDeactivate = false
         // The whole point is to be looked through: the dot must never take a
         // click away from the application the pen is actually using.
         panel.ignoresMouseEvents = true
