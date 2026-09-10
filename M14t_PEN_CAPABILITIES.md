@@ -203,6 +203,35 @@ held during contact is a real eraser to the hardware and cannot be presented as
 one to applications. It stays what `PenTouchAction` already offers — nothing, or
 an ordinary stroke.
 
+## The pen collection can be wedged, and only a replug clears it
+
+Observed over an afternoon of repeated driver restarts. The pen stopped
+reporting entirely — no proximity, no coordinates, nothing from its collection
+— while the **finger collection kept working normally**. From the outside this
+is indistinguishable from a dead stylus, and it is not one.
+
+Established by tracing: a command-line run with `--debug` recorded 1188 lines
+in which every value belonged to the finger (X within 0…12372, its TipSwitch)
+and not one came from the pen. Earlier the same day, the same build recorded
+533 pen actions across six proximity entries. So the driver was not filtering
+anything out; the panel had stopped sending.
+
+**Unplugging and replugging the panel's USB-C cable restores it**, immediately
+and completely: the next trace recorded 10740 pen actions across nine
+approaches.
+
+The cause is unclean termination while the device is held exclusively. The
+application had no signal handler — `applicationWillTerminate` covers Quit and
+does not run when a process is signalled — so every `pkill` left the HID
+manager uncancelled. Worse, `stop()` only *asked* for cancellation and the
+process exited before the completion handler ran, so even the polite path was
+not always polite. Both are fixed: the app installs the same `ShutdownHandler`
+the CLI has, and `stop()` waits (bounded) for the cancellation to complete
+before returning.
+
+If the pen ever goes silent again while the finger still works, replug the
+cable first. It is not the stylus.
+
 ## What the pipeline costs, measured
 
 Written down because a guess sent this in the wrong direction once. Drawing

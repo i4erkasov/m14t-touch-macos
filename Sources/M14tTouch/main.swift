@@ -114,11 +114,30 @@ case .runApp(let config):
     // status and a button rather than exiting with a message nobody sees — a
     // menu-bar app has no terminal to print to.
     let (engine, cursorVisibility) = makeEngine(for: config)
+    let appDriver = HIDTouchDriver(config: config, engine: engine)
+
+    // The application needs this as much as the command line does, and for a
+    // worse reason. `applicationWillTerminate` covers Quit; it does not run
+    // when the process is signalled, and a menu-bar app is signalled often —
+    // by `pkill`, by an installer replacing it, by anything that is not the
+    // menu. Dying then leaves the HID manager uncancelled while the panel is
+    // held exclusively, and that wedges the pen: the finger collection keeps
+    // working, the pen collection goes silent, and only replugging the cable
+    // brings it back. Observed, repeatedly, and it cost an afternoon to find.
+    let shutdownHandler = ShutdownHandler {
+        // The pointer first: being left without a cursor is worse than being
+        // left with a held button, and this is the last chance to give it back.
+        cursorVisibility.restore()
+        appDriver.stop()
+        exit(0)
+    }
+    _ = shutdownHandler
+
     // Top-level code in main.swift runs on the main thread but is not isolated
     // to it, so the assumption has to be stated rather than inferred.
     MainActor.assumeIsolated {
         let controller = AppController(
-            driver: HIDTouchDriver(config: config, engine: engine),
+            driver: appDriver,
             cursorVisibility: cursorVisibility,
             settings: storedSettings
         )

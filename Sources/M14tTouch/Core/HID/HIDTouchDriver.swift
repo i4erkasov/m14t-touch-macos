@@ -117,6 +117,9 @@ final class HIDTouchDriver {
     /// Logged once, because "the panel does nothing until you touch it" and
     /// "the panel is talking and we are ignoring it" look identical from the
     /// outside and have nothing in common as problems.
+    /// Signalled when the HID manager's cancellation has actually completed.
+    private var cancellation: DispatchSemaphore?
+
     private var hasLoggedFirstValue = false
 
     /// Whether to narrate every recognised action to the system log.
@@ -298,6 +301,9 @@ final class HIDTouchDriver {
             // dropped here rather than at the call to cancel.
             self?.manager = nil
             self?.log("🔌 HID manager closed")
+            // Whoever is shutting down may now exit: the panel is released.
+            self?.cancellation?.signal()
+            self?.cancellation = nil
         }
         hasLoggedFirstValue = false
         IOHIDManagerActivate(manager)
@@ -441,6 +447,8 @@ final class HIDTouchDriver {
     /// pressed: the release is normally emitted when the finger lifts or the
     /// device disappears, and process termination is neither.
     func stop() {
+        let finished = DispatchSemaphore(value: 0)
+
         // Synchronous so the release is posted before the caller exits the
         // process. Safe from the main thread, which is the only caller; calling
         // it from the queue itself would deadlock, and nothing does.
@@ -449,12 +457,30 @@ final class HIDTouchDriver {
             logActions(engine.reset())
             for action in pen.reset() { dispatch(action) }
 
-            guard let manager else { return }
+            guard let manager else {
+                finished.signal()
+                return
+            }
+            cancellation = finished
             // Cancel rather than close: the queue-based API requires it, and it
             // is what stops further callbacks arriving. The reference is
             // released in the cancel handler, not here — the object has to
             // outlive the cancellation.
             IOHIDManagerCancel(manager)
+        }
+
+        // Cancelling only *asks*. The handler that completes it runs on the
+        // driver's queue, so this waits outside the block — waiting inside
+        // would deadlock against the very handler being waited for.
+        //
+        // Worth waiting for: a process that exits between asking and being
+        // released leaves the panel held, and the panel does not recover on
+        // its own. Its finger collection keeps working while the pen
+        // collection goes silent, which looks like a broken stylus and is
+        // cured only by unplugging the cable. Bounded, because a shutdown that
+        // hangs is worse than one that gives up.
+        if finished.wait(timeout: .now() + 0.5) == .timedOut {
+            log("⚠️  HID manager did not confirm cancellation in time")
         }
     }
 
