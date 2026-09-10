@@ -27,5 +27,19 @@ enum HID {
         /// descriptor caps it at 65535, which at 100 µs per unit wraps every 6.5
         /// seconds. Durations are measured from a monotonic system timestamp.
         case scanTime = 0x56
+
+        // Collection usages, used to tell the pen's elements from the finger's.
+        case pen = 0x02
+        case stylus = 0x20
+        case finger = 0x22
+
+        // Pen state. Every one of these was observed on the device; tilt and a
+        // second barrel switch are declared by the descriptor and never sent,
+        // so they are deliberately absent (`M14t_PEN_CAPABILITIES.md`).
+        case tipPressure = 0x30
+        case inRange = 0x32
+        case invert = 0x3C
+        case barrelSwitch = 0x44
+        case eraser = 0x45
     }
 }
