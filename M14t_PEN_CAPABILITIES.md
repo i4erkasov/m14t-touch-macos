@@ -175,6 +175,19 @@ tablet-subtype `NSEvent` with `pressure` intact:
 
 So pressure is a feature this driver can actually deliver, not merely read.
 
+**But delivering it broke a real application.** Shipped on by default, on the
+reasoning that an application which does not understand tablets would ignore the
+marking and see the click it always saw. That reasoning is wrong for at least one
+real consumer: in a browser-based paint program the pen stopped working
+mid-stroke and stayed broken after the button was released. The mechanism is not
+yet identified — a stuck button and a confused tablet-state machine in the page
+are both consistent with what was seen. The event-level result above still
+stands; what does not stand is the assumption that marking events is free.
+
+It is therefore **off by default** and asked for explicitly. Anything that can
+stop the pen working must not be the default.
+
+
 **Proximity does not survive, so the eraser cannot be declared.** An application
 learns which end of the pen is in use from `NSEvent.pointingDeviceType`, which is
 carried by a `tabletProximity` event. Such an event can be built — `CGEvent.type`

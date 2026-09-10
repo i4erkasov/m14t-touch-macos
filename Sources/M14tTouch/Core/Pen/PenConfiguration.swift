@@ -88,16 +88,23 @@ struct PenConfiguration: Equatable, Codable {
 
     /// Tell applications how hard the pen is being pressed.
     ///
-    /// Measured to work: an event marked as a tablet point arrives with its
-    /// pressure intact, where an ordinary mouse event carries only 1 or 0. An
-    /// application that does not understand tablets ignores the marking and
-    /// sees the same click it always did — but the marking is a real change to
-    /// what every application receives, so it can be switched off.
+    /// Measured to work at the event level: an event marked as a tablet point
+    /// arrives with its pressure intact, where an ordinary mouse event carries
+    /// only 1 or 0 (`M14t_PEN_CAPABILITIES.md`).
     ///
-    /// What this cannot do is say *which end* of the pen is touching: the
-    /// proximity event that would carry that never reaches applications
-    /// (`M14t_PEN_CAPABILITIES.md`).
-    var sendsPressure: Bool = true
+    /// **Off by default, and that is not caution — it is a finding.** Marking
+    /// events as tablet points was tried on by default and broke a real
+    /// application: in a browser-based paint program the pen stopped working
+    /// mid-stroke and stayed broken after the button was released. The
+    /// assumption behind the default — that an application which does not
+    /// understand tablets would ignore the marking and see the click it always
+    /// saw — is false for at least one real consumer. Whatever the mechanism,
+    /// this changes what *every* application receives, and something that can
+    /// break the pen must be asked for rather than assumed.
+    ///
+    /// What it cannot do at all is say *which end* of the pen is touching: the
+    /// proximity event that would carry that never reaches applications.
+    var sendsPressure: Bool = false
 
     /// Ignore finger touches while the pen is near the panel (pen spec §15).
     ///

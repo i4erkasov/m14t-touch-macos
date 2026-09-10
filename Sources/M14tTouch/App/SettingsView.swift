@@ -347,7 +347,7 @@ private struct PenSettings: View {
                 } header: {
                     Text("Pressure")
                 } footer: {
-                    Text("Marks strokes as coming from a tablet, which is what carries pressure — an ordinary click can only be full or none. Applications that do not understand tablets see the same click as before. The panel cannot say which end of the pen is touching, so an eraser stroke is not marked as one.")
+                    Text("Marks strokes as coming from a tablet, which is what carries pressure — an ordinary click can only be full or none. Off by default: some applications handle these events badly, and one browser-based drawing app stopped responding to the pen entirely. Turn it off again if the pen misbehaves. An eraser stroke cannot be marked as one either way.")
                 }
 
                 Section {

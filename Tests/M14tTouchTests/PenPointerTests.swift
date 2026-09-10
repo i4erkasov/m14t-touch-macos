@@ -132,8 +132,12 @@ final class PenPressureTests: XCTestCase {
         PenMouseBackend.mouseEvents(for: action, sendsPressure: sending)
     }
 
-    func testSendingPressureIsOnByDefault() {
-        XCTAssertTrue(PenConfiguration().sendsPressure)
+    // Off by default because turning it on broke a real application — a
+    // browser-based paint program, where the pen stopped working mid-stroke.
+    // Marking events as tablet points changes what every application receives,
+    // so it is asked for rather than assumed.
+    func testSendingPressureIsOffByDefault() {
+        XCTAssertFalse(PenConfiguration().sendsPressure)
     }
 
     // Nothing is marked as a tablet event unless asked, so switching the setting
