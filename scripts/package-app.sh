@@ -46,12 +46,22 @@ cat > "$DESTINATION/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# Ad-hoc signature with a stable identifier. Not a real signing identity, but it
-# keeps the bundle from being rejected outright. Note that the signature still
-# changes when the binary does, so macOS may treat a rebuilt app as a new one
-# and ask for Input Monitoring and Accessibility again — see the README.
-codesign --force --sign - --identifier "$BUNDLE_ID" "$DESTINATION" 2>/dev/null \
-    || echo "  (codesign unavailable — the bundle is unsigned)"
+# Sign with a real identity when there is one, because that is what decides
+# whether the app keeps its permissions. macOS keys Input Monitoring and
+# Accessibility on the designated requirement; an ad-hoc signature pins the
+# binary's exact bytes, so every rebuild is a new application that has to be
+# granted them again. A certificate gives a requirement the next build also
+# satisfies. `scripts/make-signing-identity.sh` creates a local one.
+IDENTITY="M14t Touch Local"
+if security find-identity -v -p codesigning 2>/dev/null | grep -q "$IDENTITY"; then
+    codesign --force --sign "$IDENTITY" --identifier "$BUNDLE_ID" "$DESTINATION" \
+        && echo "  Signed as \"$IDENTITY\" — permissions survive rebuilds."
+else
+    codesign --force --sign - --identifier "$BUNDLE_ID" "$DESTINATION" 2>/dev/null \
+        || echo "  (codesign unavailable — the bundle is unsigned)"
+    echo "  Ad-hoc signed. Run scripts/make-signing-identity.sh once to stop"
+    echo "  macOS asking for Input Monitoring again after every rebuild."
+fi
 
 printf '\033[32mBuilt %s\033[0m\n' "$DESTINATION"
 echo

@@ -96,7 +96,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     /// Dim the icon when touch is off or the panel is away, so the menu bar says
     /// at a glance whether anything is happening.
     private func updateStatusItemAppearance() {
-        let live = settings.enabled && status.isConnected
+        let live = settings.enabled && status.isConnected && problem == nil
         statusItem?.button?.appearsDisabled = !live
     }
 
@@ -147,15 +147,46 @@ final class AppController: NSObject, NSApplicationDelegate {
     /// is also what the user reads; a mismatch here costs a click, not input.
     static let inputMonitoringFailure = "Input Monitoring not granted"
 
-    @objc private func openInputMonitoringSettings() {
-        PermissionsManager.openSettings(for: .inputMonitoring)
+    /// Something stopping the app from working, phrased for the user.
+    private struct Problem {
+        let text: String
+        /// The permission whose pane would fix it, when one would.
+        let permission: Permission?
+    }
+
+    /// The driver's own reason first, then Accessibility.
+    ///
+    /// Accessibility cannot be seen by the driver: it reads the panel happily
+    /// without it, and it is the *emitter* that is refused, so the panel would
+    /// report itself connected while nothing on screen moved.
+    private var problem: Problem? {
+        if let failure = status.failure {
+            return Problem(
+                text: failure,
+                permission: failure == Self.inputMonitoringFailure ? .inputMonitoring : nil
+            )
+        }
+        if status.isConnected, !PermissionsManager.isGranted(.accessibility) {
+            return Problem(text: "Accessibility not granted", permission: .accessibility)
+        }
+        return nil
+    }
+
+    /// Which pane the connection line currently opens. Set while the menu is
+    /// built, because that is when the problem was last looked at.
+    private var permissionToGrant: Permission?
+
+    @objc private func openPermissionSettings() {
+        guard let permission = permissionToGrant else { return }
+        PermissionsManager.openSettings(for: permission)
         // The grant only takes effect for a new process, so saying so here saves
         // the user deciding that the permission did not work.
         let alert = NSAlert()
-        alert.messageText = "Grant Input Monitoring, then reopen M14t Touch"
-        alert.informativeText = """
-            Add M14t Touch to the list and switch it on. macOS only applies the             change to a newly started app, so quit M14t Touch and open it again             afterwards.
-            """
+        alert.messageText = "Grant \(permission.title), then reopen M14t Touch"
+        alert.informativeText =
+            "Add M14t Touch to the list and switch it on. macOS only applies the "
+            + "change to a newly started app, so quit M14t Touch and open it "
+            + "again afterwards."
         alert.runModal()
     }
 
@@ -269,26 +300,27 @@ extension AppController: NSMenuDelegate {
     private func connectionItem() -> NSMenuItem {
         // A line that names a missing permission should be the way to grant it,
         // rather than sending the user to look for the pane themselves.
-        let fixable = status.failure == Self.inputMonitoringFailure
+        let problem = self.problem
+        permissionToGrant = problem?.permission
         let item = NSMenuItem(
             title: "",
-            action: fixable ? #selector(openInputMonitoringSettings) : nil,
+            action: problem?.permission == nil ? nil : #selector(openPermissionSettings),
             keyEquivalent: ""
         )
-        if fixable { item.target = self }
+        if problem?.permission != nil { item.target = self }
         item.isEnabled = true
 
         // A stated reason outranks the plain state: "Not connected" tells the
         // user nothing they can do, and "Input Monitoring not granted" does.
-        let connected = status.isConnected && status.failure == nil
-        let title = status.failure.map { "● \($0)" }
+        let connected = status.isConnected && problem == nil
+        let title = problem.map { "● \($0.text)" }
             ?? (connected ? "● Connected" : "○ Not connected")
         let text = NSMutableAttributedString(string: title)
         // Only the dot carries the colour. Colouring the words as well would
         // make a status line shout.
         text.addAttribute(
             .foregroundColor,
-            value: status.failure != nil
+            value: problem != nil
                 ? NSColor.systemOrange
                 : (connected ? NSColor.systemGreen : NSColor.tertiaryLabelColor),
             range: NSRange(location: 0, length: 1)
