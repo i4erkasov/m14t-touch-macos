@@ -18,41 +18,41 @@ final class CursorVisibilityTests: XCTestCase {
         func release() { releases += 1 }
     }
 
-    private func makeController(enabled: Bool = true, available: Bool = true)
+    private func makeController(policy: CursorHiding = .touching, available: Bool = true)
         -> (CursorVisibilityController, SpyVisibility) {
         let spy = SpyVisibility(available: available)
-        return (CursorVisibilityController(enabled: enabled, visibility: spy), spy)
+        return (CursorVisibilityController(policy: policy, visibility: spy), spy)
     }
 
     // One request does not hold — the window server puts the pointer back — so
     // every frame with a contact has to renew it.
     func testEveryTouchingFrameAssertsAHide() {
         let (controller, spy) = makeController()
-        for _ in 0..<5 { controller.update(isTouching: true) }
+        for _ in 0..<5 { controller.update(isTouching: true, isScrolling: false) }
         XCTAssertEqual(spy.assertions, 5)
         XCTAssertEqual(spy.releases, 0)
     }
 
     func testLiftingReleasesOnce() {
         let (controller, spy) = makeController()
-        controller.update(isTouching: true)
-        controller.update(isTouching: false)
+        controller.update(isTouching: true, isScrolling: false)
+        controller.update(isTouching: false, isScrolling: false)
         XCTAssertEqual(spy.releases, 1)
     }
 
     // Frames keep arriving with no contact; they must not keep releasing.
     func testFurtherIdleFramesDoNotReleaseAgain() {
         let (controller, spy) = makeController()
-        controller.update(isTouching: true)
-        for _ in 0..<5 { controller.update(isTouching: false) }
+        controller.update(isTouching: true, isScrolling: false)
+        for _ in 0..<5 { controller.update(isTouching: false, isScrolling: false) }
         XCTAssertEqual(spy.releases, 1)
     }
 
     func testASecondTouchHidesAgain() {
         let (controller, spy) = makeController()
-        controller.update(isTouching: true)
-        controller.update(isTouching: false)
-        controller.update(isTouching: true)
+        controller.update(isTouching: true, isScrolling: false)
+        controller.update(isTouching: false, isScrolling: false)
+        controller.update(isTouching: true, isScrolling: false)
         XCTAssertEqual(spy.assertions, 2)
         XCTAssertEqual(spy.releases, 1)
     }
@@ -61,7 +61,7 @@ final class CursorVisibilityTests: XCTestCase {
     // pointer back, so restore has to do it unprompted.
     func testRestoreReleasesEvenWithoutALift() {
         let (controller, spy) = makeController()
-        controller.update(isTouching: true)
+        controller.update(isTouching: true, isScrolling: false)
         controller.restore()
         XCTAssertEqual(spy.releases, 1)
     }
@@ -76,9 +76,9 @@ final class CursorVisibilityTests: XCTestCase {
     }
 
     func testNothingHappensWhenTheSettingIsOff() {
-        let (controller, spy) = makeController(enabled: false)
-        controller.update(isTouching: true)
-        controller.update(isTouching: false)
+        let (controller, spy) = makeController(policy: .never)
+        controller.update(isTouching: true, isScrolling: false)
+        controller.update(isTouching: false, isScrolling: false)
         XCTAssertEqual(spy.assertions, 0)
         XCTAssertFalse(controller.isActive)
     }
@@ -87,7 +87,7 @@ final class CursorVisibilityTests: XCTestCase {
     // driver working with the feature inert, not failing.
     func testNothingHappensWhenTheImplementationIsUnavailable() {
         let (controller, spy) = makeController(available: false)
-        controller.update(isTouching: true)
+        controller.update(isTouching: true, isScrolling: false)
         XCTAssertEqual(spy.assertions, 0)
         XCTAssertFalse(controller.isActive)
     }
@@ -96,12 +96,56 @@ final class CursorVisibilityTests: XCTestCase {
         XCTAssertFalse(PublicCursorVisibility().isAvailable)
     }
 
-    func testTheSettingIsOffByDefaultAndTogglesFromTheCommandLine() {
-        XCTAssertFalse(GestureConfiguration().hideCursorWhileTouching)
-        guard case .run(let on) = ArgumentParser.parse(["--hide-cursor"]),
-              case .run(let off) = ArgumentParser.parse(["--hide-cursor", "--no-hide-cursor"])
+    // MARK: - Policy
+
+    // The mode that actually works: during a scroll the pointer is placed once
+    // and then stays still, which is the only state the window server keeps
+    // hidden.
+    func testScrollingPolicyHidesOnlyOnceScrollingHasBegun() {
+        let (controller, spy) = makeController(policy: .scrolling)
+        controller.update(isTouching: true, isScrolling: false)
+        XCTAssertEqual(spy.assertions, 0)
+
+        controller.update(isTouching: true, isScrolling: true)
+        XCTAssertEqual(spy.assertions, 1)
+    }
+
+    // A long press resolving into a drag must give the pointer back, since the
+    // drag will be moving it from then on.
+    func testScrollingPolicyReleasesIfTheGestureTurnsOutNotToBeAScroll() {
+        let (controller, spy) = makeController(policy: .scrolling)
+        controller.update(isTouching: true, isScrolling: true)
+        controller.update(isTouching: true, isScrolling: false)
+        XCTAssertEqual(spy.releases, 1)
+    }
+
+    func testTouchingPolicyHidesFromTheFirstContact() {
+        let (controller, spy) = makeController(policy: .touching)
+        controller.update(isTouching: true, isScrolling: false)
+        XCTAssertEqual(spy.assertions, 1)
+    }
+
+    func testNeverPolicyIsInactiveEvenWhenSupported() {
+        let (controller, spy) = makeController(policy: .never)
+        controller.update(isTouching: true, isScrolling: true)
+        XCTAssertEqual(spy.assertions, 0)
+        XCTAssertFalse(controller.isActive)
+    }
+
+    func testThePolicyDefaultsToNeverAndParsesFromTheCommandLine() {
+        XCTAssertEqual(GestureConfiguration().cursorHiding, .never)
+        guard case .run(let scrolling) = ArgumentParser.parse(["--hide-cursor", "scrolling"]),
+              case .run(let touching) = ArgumentParser.parse(["--hide-cursor", "touching"])
         else { return XCTFail("expected run outcomes") }
-        XCTAssertTrue(on.gestures.hideCursorWhileTouching)
-        XCTAssertFalse(off.gestures.hideCursorWhileTouching)
+        XCTAssertEqual(scrolling.gestures.cursorHiding, .scrolling)
+        XCTAssertEqual(touching.gestures.cursorHiding, .touching)
+    }
+
+    func testAnUnknownModeIsRefusedAndNamesTheValidOnes() {
+        guard case .error(let message) = ArgumentParser.parse(["--hide-cursor", "sometimes"]) else {
+            return XCTFail("expected an error outcome")
+        }
+        XCTAssertTrue(message.contains("sometimes"))
+        for mode in CursorHiding.allCases { XCTAssertTrue(message.contains(mode.rawValue)) }
     }
 }

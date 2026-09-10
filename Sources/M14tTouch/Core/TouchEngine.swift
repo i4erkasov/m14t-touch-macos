@@ -13,11 +13,18 @@ final class TouchEngine {
     private let emitter: EventEmitter
     private let cursorVisibility: CursorVisibilityController
 
+    /// Whether the gesture in progress has committed to scrolling.
+    ///
+    /// Read from the actions rather than asked of the recognizer, so mouse mode
+    /// does not have to answer a question it has no notion of. A scroll action
+    /// says the phase began; a frame without contact says it ended.
+    private var isScrolling = false
+
     init(
         recognizer: any GestureRecognizer,
         emitter: EventEmitter,
         cursorVisibility: CursorVisibilityController = CursorVisibilityController(
-            enabled: false, visibility: PublicCursorVisibility()
+            policy: .never, visibility: PublicCursorVisibility()
         )
     ) {
         self.recognizer = recognizer
@@ -33,11 +40,17 @@ final class TouchEngine {
     /// about logging.
     @discardableResult
     func process(_ frame: TouchFrame) -> [InputAction] {
+        let isTouching = frame.primaryContact?.isTouching ?? false
+        if !isTouching { isScrolling = false }
+
         // Before the actions, so a hide is in force by the time an event moves
         // the pointer. Asserted every frame: one request does not hold.
-        cursorVisibility.update(isTouching: frame.primaryContact?.isTouching ?? false)
+        cursorVisibility.update(isTouching: isTouching, isScrolling: isScrolling)
 
         let actions = recognizer.process(frame)
+        if actions.contains(where: { if case .scroll = $0 { return true } else { return false } }) {
+            isScrolling = true
+        }
         actions.forEach(emitter.emit)
         return actions
     }
@@ -49,6 +62,7 @@ final class TouchEngine {
         // The device vanished mid-gesture; give the pointer back before anything
         // else, since no further frame will arrive to do it.
         cursorVisibility.restore()
+        isScrolling = false
 
         let actions = recognizer.reset()
         actions.forEach(emitter.emit)

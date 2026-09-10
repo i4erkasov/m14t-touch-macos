@@ -84,16 +84,15 @@ case .run(let config):
 
     ensureAccessibilityOrExit(prompt: config.promptForAccessibility)
 
+    let hiding = config.gestures.cursorHiding
     let cursorVisibility = CursorVisibilityController(
-        enabled: config.gestures.hideCursorWhileTouching,
-        visibility: config.gestures.hideCursorWhileTouching
-            ? PrivateCursorVisibility()
-            : PublicCursorVisibility()
+        policy: hiding,
+        visibility: hiding.hidesAnything ? PrivateCursorVisibility() : PublicCursorVisibility()
     )
-    if config.gestures.hideCursorWhileTouching {
+    if hiding.hidesAnything {
         print(cursorVisibility.isActive
-              ? "🫥  Cursor hiding: on"
-              : "🫥  Cursor hiding: requested but unavailable — continuing without it")
+              ? "🫥  Cursor hiding: \(hiding.rawValue)"
+              : "🫥  Cursor hiding: '\(hiding.rawValue)' requested but unavailable — continuing without it")
     }
 
     let engine = TouchEngine(

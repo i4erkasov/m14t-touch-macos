@@ -11,21 +11,32 @@ import Foundation
 final class CursorVisibilityController {
 
     private let visibility: CursorVisibility
-    private let enabled: Bool
+    private let policy: CursorHiding
     private var isHiding = false
 
-    init(enabled: Bool, visibility: CursorVisibility) {
-        self.enabled = enabled
+    init(policy: CursorHiding, visibility: CursorVisibility) {
+        self.policy = policy
         self.visibility = visibility
     }
 
-    /// Whether hiding will actually happen — switched on *and* supported.
-    var isActive: Bool { enabled && visibility.isAvailable }
+    /// Whether hiding will actually happen — asked for *and* supported.
+    var isActive: Bool { policy.hidesAnything && visibility.isAvailable }
 
-    /// Follow the contact state of the latest frame.
-    func update(isTouching: Bool) {
+    /// Follow the latest frame.
+    ///
+    /// - Parameter isScrolling: whether the gesture has committed to scrolling.
+    ///   Only meaningful for the `.scrolling` policy.
+    func update(isTouching: Bool, isScrolling: Bool) {
         guard isActive else { return }
-        if isTouching {
+
+        let wanted: Bool
+        switch policy {
+        case .never:     wanted = false
+        case .scrolling: wanted = isTouching && isScrolling
+        case .touching:  wanted = isTouching
+        }
+
+        if wanted {
             isHiding = true
             visibility.assertHidden()
         } else if isHiding {
