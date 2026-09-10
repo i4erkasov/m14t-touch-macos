@@ -128,6 +128,46 @@ swift build -c release
 Without `--display`, the first external display is used.
 
 ---
+## The stylus
+
+The pen hovers, clicks, drags and reports pressure. Hovering moves the pointer
+to where the pen is **on the panel** — which sounds unremarkable until you know
+what happens without this driver.
+
+macOS handles the M14t's pen itself, and handles it as a relative pointing
+device: hovering over the panel drags the pointer around whichever screen it was
+already on, usually the built-in one. It cannot be corrected by adding absolute
+positioning alongside, because the two would fight. So the driver takes the
+device exclusively.
+
+**That trade is worth knowing.** While the driver runs, the pen is accurate.
+While it does not, **the pen does nothing at all** — where before it did
+something wrong. `--no-pen` gives the device back if you would rather have the
+old behaviour.
+
+What the hardware turned out to do, all of it measured rather than assumed
+(`M14t_PEN_CAPABILITIES.md`):
+
+| | |
+|---|---|
+| Hover, proximity, tip, pressure | yes |
+| Buttons | two, and both work while hovering |
+| The button nearest the tip | an **eraser**, not a button — hold it and the panel reports an eraser stroke instead of a tip one |
+| The far button | free to be mapped; not mapped yet |
+| Tilt | declared by the descriptor, never sent |
+
+Two things follow that are worth expecting rather than discovering:
+
+- **A click needs a firm press.** The tip switch fires around 58% of the
+  pressure range, so a light or angled tap may not register. This is the pen,
+  not the driver — contacts arrive cleanly, with no chatter.
+- **The eraser does nothing yet.** Mapping it, and the far button, to actions is
+  the next piece of work; guessing that an eraser stroke means a left click
+  would be worse than waiting.
+
+---
+
+
 ## Permissions
 
 macOS gates the two things this driver needs:
@@ -264,7 +304,9 @@ multi-display offsets, degenerate input) and CLI parsing.
 - [x] Guided calibration on the panel itself
 - [ ] Start at login, reconnect handling
 - [ ] Diagnostics: raw HID viewer, device info
-- [ ] Two-finger scroll and right-click, pen support
+- [x] Stylus: hover, tip, pressure, absolute positioning on the panel
+- [ ] Stylus: button and eraser actions, pressure to applications
+- [ ] Two-finger scroll and right-click
 
 Multi-touch is not implemented: everything above is one contact. What it would
 take, and why pinch-to-zoom is harder than it looks, is written up in

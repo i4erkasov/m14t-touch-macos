@@ -535,7 +535,12 @@ final class HIDTouchDriver {
         )
 
         for action in pen.process(sample) {
-            if config.debugMode { log("✒️  \(action)") }
+            if config.debugMode {
+                // Raw pressure alongside the normalised value: the two disagreeing
+                // is how a wrong scale shows itself, and a normalised 0 could mean
+                // either a light touch or a floor set too high.
+                log("✒️  \(action)   [rawPressure \(Int(penPressureRaw))]")
+            }
             penBackend.handle(action)
         }
     }
