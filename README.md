@@ -240,15 +240,29 @@ does not change.
 It takes a **Developer ID**, from the Apple Developer Program (99 USD/year). The
 build is already prepared for it and nothing else has to change:
 
-1. Create a *Developer ID Application* certificate and install it. `package-app.sh`
-   prefers it over the local one automatically and signs with the hardened
-   runtime, which notarization requires.
+1. Create a *Developer ID Application* certificate and install it — Xcode →
+   Settings → Accounts → Manage Certificates → **+** is the short way; the
+   developer portal is the long one. `package-app.sh` prefers it over the local
+   identity automatically and signs with the hardened runtime, which
+   notarization requires.
+
+   **Back up the private key.** Export it from Keychain Access as a
+   password-protected `.p12` and keep it somewhere other than this machine. A
+   replacement certificate has a different fingerprint, and therefore a
+   different designated requirement, and therefore everyone you have already
+   given the app to loses their Input Monitoring and Accessibility grants on
+   your next update. That is the same failure an ad-hoc signature causes on
+   every single build.
 2. Store notary credentials once, so no secret ever reaches a script:
 
    ```bash
    xcrun notarytool store-credentials m14ttouch \
        --apple-id <your Apple ID> --team-id <your team> --password <app-specific>
    ```
+
+   The password is an *app-specific* one, made at appleid.apple.com → Sign-In
+   and Security, not your Apple ID password. Notarizing itself costs nothing
+   beyond the membership and takes a minute or two per build.
 
 3. `./scripts/make-dmg.sh` then notarizes and staples the image by itself, and
    says so. The result opens on any Mac with no warning at all.
