@@ -454,6 +454,15 @@ private struct DiagnosticsSettings: View {
             }
 
             Section {
+                Toggle("Log pen actions to the system log", isOn: $model.logsInput)
+            } header: {
+                Text("Logging")
+            } footer: {
+                Text("Records every action the pen produces — hovering, contacts, buttons — so a problem can be read back afterwards:\n\nlog show --last 5m --predicate 'subsystem == \"com.m14ttouch.app\"' --info\n\nSwitch it off when done; it is verbose.")
+                    .textSelection(.enabled)
+            }
+
+            Section {
                 Button("Copy report") { model.copyDiagnostics() }
             } footer: {
                 Text("Copies the above, for pasting into a bug report.")

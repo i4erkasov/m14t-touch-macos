@@ -119,6 +119,13 @@ final class HIDTouchDriver {
     /// outside and have nothing in common as problems.
     private var hasLoggedFirstValue = false
 
+    /// Whether to narrate every recognised action to the system log.
+    ///
+    /// A switch rather than a build flag: the problems worth logging happen on
+    /// the user's desk, in the packaged app, and asking for a debug build is
+    /// asking for the problem not to be reported.
+    private var logsActions = false
+
     private var live = LiveInput()
     private var isMonitoring = false
     private var liveLastPublished = DispatchTime.now()
@@ -297,6 +304,16 @@ final class HIDTouchDriver {
         log(config.penEnabled
             ? "✅ Listening — device held exclusively, so the pen is ours"
             : "✅ Listening for touch device…")
+    }
+
+    /// Start or stop narrating recognised actions to the system log, from any
+    /// thread.
+    func setActionLogging(_ enabled: Bool) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.logsActions = enabled
+            self.log(enabled ? "📝 Input logging on" : "📝 Input logging off")
+        }
     }
 
     /// Start or stop publishing live input, from any thread.
@@ -739,6 +756,7 @@ final class HIDTouchDriver {
     /// after the device disappeared would be a dot floating over a driver that
     /// is no longer running.
     private func dispatch(_ action: PenAction) {
+        if logsActions { log("✒️  \(action)") }
         penBackend.handle(action)
         // After the backend, not before: the pointer the dot stands in for has
         // already been moved by then, so the two land together rather than the

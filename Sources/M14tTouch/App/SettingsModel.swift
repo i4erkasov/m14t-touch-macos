@@ -67,6 +67,16 @@ final class SettingsModel: ObservableObject {
     /// which owns the driver.
     var setLiveMonitoring: ((Bool) -> Void)?
 
+    /// Narrate pen actions to the system log. Set by the controller.
+    var setActionLogging: ((Bool) -> Void)?
+
+    /// Whether that narration is on. Not persisted: it is a thing you switch on
+    /// to catch a problem, not a preference, and one left on forever would fill
+    /// the log for nobody.
+    @Published var logsInput = false {
+        didSet { setActionLogging?(logsInput) }
+    }
+
     /// What the panel is reporting right now, while the diagnostics pane is
     /// open. Empty otherwise, because nothing is asked for otherwise.
     @Published var live = LiveInput()
