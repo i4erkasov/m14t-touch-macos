@@ -9,11 +9,15 @@
 
 macOS recognises the M14t as an external display but silently ignores its USB
 HID touch interface — so the screen works, but touch does nothing. The usual fix
-is commercial drivers that costs **~$171** for a single license. This is
-a focused open-source alternative that does one thing well: **turns a finger
-touch into a mouse click**, entirely in user space using Apple's public APIs.
+is a commercial driver costing **~$171** for a single licence. This is a focused
+open-source alternative: **tap to click, swipe to scroll, press and hold to
+drag**, in user space, from a menu-bar app.
 
-No kernel extension. No system extension. No paid license. ~600 lines of Swift.
+No kernel extension. No system extension. No paid licence.
+
+One private API is used, for one thing only — hiding the pointer while a finger
+is on the panel, which no public API can do from a background process. It is off
+by default, confined to a single file, and the driver runs without it.
 
 ---
 
@@ -23,172 +27,195 @@ The M14t multiplexes two independent interfaces over the single USB-C cable:
 
 ```
 USB-C cable
-├── DisplayPort Alt Mode  →  video    →  handled natively by macOS ✅
-└── USB HID Digitizer      →  touch    →  ignored by macOS, handled here ✅
+├── DisplayPort Alt Mode  →  video  →  handled natively by macOS
+└── USB HID Digitizer     →  touch  →  ignored by macOS, handled here
 ```
 
-The driver reads the HID digitizer stream and converts it to cursor events:
+There are two ways to read a touch, and you choose between them:
 
-```
- ┌──────────────┐   raw X / Y / TipSwitch   ┌────────────────────┐
- │  M14t panel  │ ─────────────────────────▶│   HIDTouchDriver   │
- └──────────────┘     (IOHIDManager)         └─────────┬──────────┘
-                                                       │
-                          calibrated raw → screen px   │
-                                            ┌──────────▼──────────┐
-                                            │  CoordinateMapper    │  (pure, tested)
-                                            └──────────┬──────────┘
-                                                       │  CGPoint
-                                            ┌──────────▼──────────┐
-                                            │    MouseEmitter      │
-                                            └──────────┬──────────┘
-                                                       │  CGEvent
-                                                       ▼
-                                              macOS cursor / click
-```
+**Touchscreen mode** treats the panel as a touchscreen. A tap clicks where you
+tapped, a swipe scrolls, and pressing and holding starts a drag. The pointer
+does not chase your finger: it is placed once, where the gesture begins, and
+left there.
 
-**Touch model** — a single contact maps directly to the left mouse button:
-
-| Gesture | macOS event |
+| Gesture | Result |
 |---|---|
-| Finger down | `leftMouseDown` |
-| Finger moves while down | `leftMouseDragged` |
-| Finger up | `leftMouseUp` |
+| Short tap | Click at the point touched |
+| Swipe | Scroll, with the pointer stationary |
+| Press, hold, then move | Drag |
 
-A down-then-up without movement is a **click**; a down-move-up is a **drag**.
-That's the whole contract — deliberately simple and reliable.
+**Mouse mode** is the original behaviour, kept as the compatibility fallback: a
+contact presses the left button, movement drags it, release releases it.
 
----
 
 ## Project layout
 
-The code is split by responsibility so each piece is small and, where it
-matters, unit-testable:
+Split by responsibility, so each piece is small and — where it matters — testable
+without a panel attached.
 
-| File | Responsibility |
-|---|---|
-| `main.swift` | Entry point: dispatch, permissions, run loop |
-| `ArgumentParser.swift` | Pure CLI parsing → `TouchConfig` |
-| `TouchConfig.swift` | Runtime options value type |
-| `HIDTouchDriver.swift` | IOKit orchestration + touch state machine |
-| `CoordinateMapper.swift` | **Pure** raw→screen math (fully tested) |
-| `Calibration.swift` | Calibration model + JSON persistence |
-| `DisplayResolver.swift` | Display enumeration and selection |
-| `MouseEmitter.swift` | `CGEvent` posting |
-| `HIDUsage.swift` | Named HID usage constants |
+```
+Sources/M14tTouch/
+├── main.swift                 entry point; picks CLI or app
+├── App/                       menu bar, settings window
+├── CLI/                       argument parsing, runtime options
+└── Core/
+    ├── TouchEngine.swift      pumps frames from recognizer into emitter
+    ├── HID/                   IOKit, usage constants, TouchPoint/TouchFrame
+    ├── Display/               display identity, selection, coordinate mapping
+    ├── Calibration/           persistence, precedence, auto-calibration
+    ├── Gestures/              recognizers and their vocabulary
+    ├── Events/                emission into macOS
+    ├── Cursor/                pointer visibility
+    ├── Permissions/           Input Monitoring and Accessibility status
+    └── Settings/              stored preferences
+```
 
-The mapping math and argument parsing have no hardware or global-state
-dependencies, so they're covered by `swift test` without a connected device.
+The pipeline:
+
+```
+IOHIDManager -> HIDTouchDriver -> TouchFrame -> GestureRecognizer -> InputAction -> EventEmitter -> CGEvent
+                (IOKit only)                    (what the finger meant)            (how macOS is told)
+```
+
+Gesture recognition sees nothing but frames and produces nothing but actions —
+no IOKit, no CoreGraphics, no calibration — which is why the tricky parts are
+covered by `swift test` with no hardware.
 
 ---
 
 ## Requirements
 
 - macOS 13 (Ventura) or later — Intel or Apple Silicon
-- Xcode Command Line Tools: `xcode-select --install`
-- The M14t connected via a **data-capable** USB-C cable
+- Full Xcode to run the tests. `swift build` works with Command Line Tools alone,
+  but XCTest does not ship with them
+- The M14t connected with a **data-capable** USB-C cable
 
 ---
 
 ## Quick start
 
+### As an application
+
 ```bash
-git clone https://github.com/talesmousinho/m14t-touch-macos.git
+git clone https://github.com/i4erkasov/m14t-touch-macos.git
 cd m14t-touch-macos
 
-# 1. Build
+./scripts/package-app.sh
+cp -R "build/M14t Touch.app" ~/Applications/
+open ~/Applications/"M14t Touch.app"
+```
+
+Copy it somewhere permanent before granting permissions — see below for why.
+
+It lives in the menu bar. The first launch will look broken: the status says no
+touch device even though the panel is plugged in, because reading the HID stream
+needs a permission it does not have yet. Open **Settings… → General →
+Permissions** and grant both.
+
+### From the terminal
+
+The command-line build is the same binary and is the better one to develop
+against, since it keeps its permissions across rebuilds.
+
+```bash
 swift build -c release
 
-# 2. Find which display index is your M14t
-.build/release/m14ttouch --list
-
-# 3. Calibrate once — touch all four corners firmly
-.build/release/m14ttouch --display 1 --auto-calibrate
-
-# 4. From now on, just run (calibration is remembered)
-.build/release/m14ttouch --display 1
+.build/release/m14ttouch --list                    # which displays are connected
+.build/release/m14ttouch --auto-calibrate          # touch all four corners
+.build/release/m14ttouch --mode touchscreen        # tap, scroll, long-press drag
 ```
 
-Or use the helper script, which builds and runs calibration interactively in the
-terminal. Touch all four corners, then press Enter; the installer stops
-calibration and returns the prompt. With `--autostart`, the driver then runs
-silently via LaunchAgent, discards normal output, and writes errors to
-`/tmp/m14ttouch.err.log`. The script installs the driver at
-`~/.local/bin/m14ttouch` so macOS permissions keep pointing at a stable path:
-
-```bash
-./install.sh              # build + calibrate
-./install.sh --autostart  # build + calibrate + run automatically at login
-```
+Without `--display`, the first external display is used.
 
 ---
-
 ## Permissions
 
-macOS gates the two things this driver needs. Grant both once:
+macOS gates the two things this driver needs:
 
-| Permission | Why | Where |
-|---|---|---|
-| **Input Monitoring** | Read raw HID touch data | System Settings → Privacy & Security → Input Monitoring |
-| **Accessibility** | Post cursor / click events | System Settings → Privacy & Security → Accessibility |
+| Permission | Why |
+|---|---|
+| **Input Monitoring** | Reads the raw HID touch stream |
+| **Accessibility** | Posts pointer, click and scroll events |
 
-Add your terminal app for interactive runs, and add `~/.local/bin/m14ttouch` for
-LaunchAgent/autostart runs. If `m14ttouch` is already listed but autostart still
-fails, remove that entry and add `~/.local/bin/m14ttouch` again, then restart the
-existing LaunchAgent with:
+The app shows both under **Settings… → General → Permissions**, with a button
+that opens the right pane. It re-checks whenever you come back to it, so the
+status updates without a restart.
 
-```bash
-launchctl kickstart -k "gui/$(id -u)/com.talesfonseca.m14ttouch"
-```
+**They are granted per binary, not per project.** The app and the command-line
+build are separate as far as macOS is concerned, and granting one does nothing
+for the other. Two consequences worth knowing before they waste your time:
 
-The driver prompts for Accessibility automatically on first interactive run.
+- **Copy the app somewhere permanent before granting.** Permission follows the
+  path, so an app granted in `build/` loses it on the next rebuild.
+- **Rebuilding can revoke it.** The bundle is signed ad-hoc, so its signature
+  changes with the binary and macOS may treat the rebuilt app as a stranger. If
+  the app stops working after a rebuild, remove it from both panes and add it
+  again. This is why development is better done against the command-line build,
+  which keeps its grants.
 
----
 
 ## Calibration
 
-The M14t's HID descriptor advertises a `0–32767` coordinate range but only
-emits values in a much narrower band — so a naive mapping puts touches in the
-wrong place. `--auto-calibrate` solves this by widening its known range as you
-touch, then saving the result to `~/.m14ttouch.json`:
+The panel reports a narrower coordinate range than its HID descriptor claims, so
+a naive mapping puts touches in the wrong place. `--auto-calibrate` widens its
+known range as you touch and saves the result to `~/.m14ttouch.json`:
 
 ```json
-{
-  "xMax" : 12371,
-  "xMin" : 1,
-  "yMax" : 6959,
-  "yMin" : 1
-}
+{ "xMin": 1, "xMax": 12302, "yMin": 108, "yMax": 6959 }
 ```
 
-Subsequent launches load this automatically. If something changes:
+Touch **all four corners** — nothing is saved until both axes have spread, so
+covering only one direction produces no calibration at all.
+
+Subsequent launches load it automatically. Precedence is **manual flags > saved
+file > what the descriptor claims**, and the descriptor is the least trustworthy
+of the three: this panel presents two interfaces, and one of them advertises a
+range it never reports.
 
 ```bash
-m14ttouch --reset-calibration                 # wipe and start over
-m14ttouch --display 1 --x-min 1 --x-max 12371 --y-min 1 --y-max 6959  # set by hand
-m14ttouch --display 1 --invert-y              # fix a flipped axis
+m14ttouch --reset-calibration                              # start over
+m14ttouch --x-min 1 --x-max 12302 --y-min 108 --y-max 6959 # set by hand
 ```
 
----
+The settings window shows the current calibration and can reset it. Calibrating
+from the app, with targets to touch, is not implemented yet.
+
 
 ## All options
 
+Run `m14ttouch --help` for the current list. The ones worth knowing:
+
 ```
---display N          Display index the M14t is mapped to (default: 1)
---auto-calibrate     Learn the touch range, then persist it
---invert-x           Mirror the horizontal axis
---invert-y           Mirror the vertical axis
---x-min / --x-max    Manual raw X bounds (override saved calibration)
---y-min / --y-max    Manual raw Y bounds
---debug              Print every HID event and resulting action
---no-accessibility-prompt
-                     Suppress the Accessibility prompt for LaunchAgents
---list               List connected displays and exit
---reset-calibration  Delete saved calibration and exit
---help, -h           Show help
+--app                  Run as a menu-bar application
+--mode MODE            mouse (default) or touchscreen
+--display N            Display index; without it, the first external one
+--auto-calibrate       Learn the touch range, then persist it
+--list                 List connected displays and exit
+--reset-calibration    Delete saved calibration and exit
+
+Touchscreen gestures
+--no-tap                 A short touch does not click
+--no-one-finger-scroll   A swipe does nothing rather than scrolling
+--no-long-press-drag     Holding still stays a tap
+--scroll-threshold N     Movement that commits to scrolling (default: 10 px)
+--scroll-sensitivity N   Multiplier for scroll deltas (default: 1.0)
+--no-natural-scroll      Invert the scroll direction
+--long-press MS          Hold before a contact becomes a drag (default: 400)
+
+Pointer
+--hide-cursor MODE       never (default), scrolling, or touching
+--no-restore-cursor      Leave the pointer where the gesture took it
+
+Diagnostics
+--debug                Print every HID event and resulting action
+--invert-x, --invert-y Mirror an axis
+--x-min / --x-max      Manual raw bounds, overriding saved calibration
+--y-min / --y-max
 ```
 
----
+Anything set in the app's settings window is remembered; command-line flags
+override the stored value for that run.
+
 
 ## Testing
 
@@ -205,33 +232,33 @@ multi-display offsets, degenerate input) and CLI parsing.
 
 | Symptom | Fix |
 |---|---|
-| No device detected | Replug USB-C; confirm the cable carries data, not just power; try `--debug` |
-| Touch offset / wrong place | Re-run `--auto-calibrate` and touch all four corners |
-| Vertically/horizontally flipped | Add `--invert-y` and/or `--invert-x` |
-| Cursor doesn't move at all | Grant **Accessibility** permission |
-| `--debug` shows nothing | Grant **Input Monitoring** permission |
-| Accessibility prompt repeats | Re-run `./install.sh --autostart`; the LaunchAgent should use `--no-accessibility-prompt` |
-| Autostart installs but driver is not running | Remove/re-add **Accessibility** for `~/.local/bin/m14ttouch`, then run `launchctl kickstart -k "gui/$(id -u)/com.talesfonseca.m14ttouch"` |
-| Works in Terminal, stops after closing it | Use `./install.sh --autostart` |
+| No device detected | Replug the USB-C cable and confirm it carries data, not just power. `--debug` prints every HID event |
+| The app says no device, the terminal build works | Input Monitoring is granted to one binary and not the other — see Permissions |
+| It worked, then stopped after a rebuild | The ad-hoc signature changed; remove and re-add the app in both permission panes |
+| Touch lands in the wrong place | Run `--auto-calibrate` and touch all four corners. If it is inverted, use `--invert-x` / `--invert-y` or the Calibration tab |
+| Touch lands on the wrong screen | Pick the display in **Settings… → General**, or pass `--display N` |
+| Nothing moves at all | Accessibility is missing |
+| The pointer stays hidden | Only possible with `--hide-cursor`. Quitting restores it; `killall m14ttouch` does not, so quit from the menu |
+| A swipe does nothing | One-finger scroll is switched off — that setting means exactly this |
 
----
 
 ## Scope & roadmap
 
-This release is intentionally **single-touch only** — one contact, one cursor —
-because that's the case that's robust across apps. Multi-finger gestures
-(two-finger scroll, right-click) are a natural next step but require frame-based
-contact tracking and are out of scope for v1.
-
-- [x] Single-touch → click / drag
+- [x] Single-touch → click / drag (mouse mode)
+- [x] Tap to click, one-finger scroll, long press to drag (touchscreen mode)
 - [x] Auto-calibration with persistence
-- [x] Multi-display support, axis inversion
-- [x] Unit-tested coordinate mapping
-- [ ] Two-finger scroll
-- [ ] Two-finger tap → right-click
-- [ ] Menu-bar status app
+- [x] Display chosen by identity, so replugging finds it again
+- [x] Menu-bar app with a settings window
+- [x] Optional pointer hiding and restoring
+- [ ] Guided calibration on the panel itself
+- [ ] Start at login, reconnect handling
+- [ ] Diagnostics: raw HID viewer, device info
+- [ ] Two-finger scroll and right-click, pen support
 
----
+Multi-touch is not implemented: everything above is one contact. What it would
+take, and why pinch-to-zoom is harder than it looks, is written up in
+`docs/pinch-and-multitouch.md`.
+
 
 ## Why this exists
 
