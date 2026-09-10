@@ -46,10 +46,12 @@ struct SettingsView: View {
             .navigationSplitViewColumnWidth(min: 170, ideal: 190, max: 240)
         } detail: {
             detail
-                .navigationTitle(section.title)
         }
-        // The sidebar stays put: collapsing it would hide the settings rather
-        // than organise them, which is the failure this replaced.
+        // The sidebar stays put. NavigationSplitView puts a collapse button in
+        // the toolbar by default, and it both hides the sections and overlaps
+        // the content when a pane scrolls — which is the failure the tab row had
+        // and the reason for moving away from it.
+        .modifier(FixedSidebar())
         .navigationSplitViewStyle(.balanced)
         .frame(minWidth: 660, minHeight: 460)
     }
@@ -62,6 +64,23 @@ struct SettingsView: View {
         case .pen:         PenSettings(model: model)
         case .calibration: CalibrationSettings(model: model)
         case .diagnostics: DiagnosticsSettings(model: model)
+        }
+    }
+}
+
+/// Removes the sidebar collapse button where the system allows it.
+///
+/// `toolbar(removing:)` arrived in macOS 14 and the deployment target is 13, so
+/// on an older system the button remains. It is worth taking where it is
+/// available rather than rebuilding the sidebar by hand to avoid one control:
+/// `NavigationSplitView` is what gives the sidebar its material and its
+/// selection behaviour, and an approximation would show.
+private struct FixedSidebar: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 14, *) {
+            content.toolbar(removing: .sidebarToggle)
+        } else {
+            content
         }
     }
 }
