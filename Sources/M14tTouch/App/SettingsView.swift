@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// The settings window.
@@ -11,7 +12,6 @@ struct SettingsView: View {
 
     @ObservedObject var model: SettingsModel
     @State private var section: Section = .general
-    @State private var columns = NavigationSplitViewVisibility.all
 
     enum Section: String, CaseIterable, Identifiable {
         case general, touch, pen, calibration, diagnostics
@@ -39,21 +39,25 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columns) {
+        // Laid out directly rather than with NavigationSplitView, which insists
+        // on a collapse button in the detail's toolbar. `toolbar(removing:)`
+        // does not reach it in a hand-made window, and the button both hid the
+        // sections and overlapped the window title. A sidebar that cannot be
+        // collapsed needs no control to collapse it.
+        HStack(spacing: 0) {
             List(Section.allCases, selection: $section) { section in
                 Label(section.title, systemImage: section.symbol).tag(section)
             }
-            .navigationSplitViewColumnWidth(min: 170, ideal: 190, max: 240)
-        } detail: {
+            .listStyle(.sidebar)
+            .frame(width: 190)
+            .background(SidebarMaterial())
+
+            Divider()
+
             detail
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        // The sidebar stays put. NavigationSplitView puts a collapse button in
-        // the toolbar by default, and it both hides the sections and overlaps
-        // the content when a pane scrolls — which is the failure the tab row had
-        // and the reason for moving away from it.
-        .modifier(FixedSidebar())
-        .navigationSplitViewStyle(.balanced)
-        .frame(minWidth: 660, minHeight: 460)
+        .frame(minWidth: 680, minHeight: 460)
     }
 
     @ViewBuilder
@@ -68,21 +72,23 @@ struct SettingsView: View {
     }
 }
 
-/// Removes the sidebar collapse button where the system allows it.
+/// The system's own sidebar material.
 ///
-/// `toolbar(removing:)` arrived in macOS 14 and the deployment target is 13, so
-/// on an older system the button remains. It is worth taking where it is
-/// available rather than rebuilding the sidebar by hand to avoid one control:
-/// `NavigationSplitView` is what gives the sidebar its material and its
-/// selection behaviour, and an approximation would show.
-private struct FixedSidebar: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(macOS 14, *) {
-            content.toolbar(removing: .sidebarToggle)
-        } else {
-            content
-        }
+/// The one piece of AppKit here, and deliberately not a hand-drawn background:
+/// SwiftUI only supplies this material inside `NavigationSplitView`, which is
+/// exactly what had to go, and a flat colour approximating it would read as
+/// almost-right, which is worse than plainly wrong. This is the system view the
+/// system itself uses.
+private struct SidebarMaterial: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .sidebar
+        view.blendingMode = .behindWindow
+        view.state = .followsWindowActiveState
+        return view
     }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }
 
 // MARK: - General
