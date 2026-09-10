@@ -177,8 +177,19 @@ m14ttouch --reset-calibration                              # start over
 m14ttouch --x-min 1 --x-max 12302 --y-min 108 --y-max 6959 # set by hand
 ```
 
-The settings window shows the current calibration and can reset it. Calibrating
-from the app, with targets to touch, is not implemented yet.
+### From the app
+
+**Calibrate…**, in the menu or the settings window, covers the panel and shows
+four targets to touch. It then asks whether a dot follows your finger, and its
+buttons are pressed *through the calibration being tested* — so hitting **Keep
+it** is itself the proof that it worked. Escape cancels and keeps whatever was
+there before.
+
+It also works out which way the panel counts, so a mirrored axis is corrected
+without anyone having to find the checkbox.
+
+Calibration is stored per display, so a panel is recognised again after
+replugging and a second one does not overwrite the first.
 
 
 ## All options
@@ -250,7 +261,7 @@ multi-display offsets, degenerate input) and CLI parsing.
 - [x] Display chosen by identity, so replugging finds it again
 - [x] Menu-bar app with a settings window
 - [x] Optional pointer hiding and restoring
-- [ ] Guided calibration on the panel itself
+- [x] Guided calibration on the panel itself
 - [ ] Start at login, reconnect handling
 - [ ] Diagnostics: raw HID viewer, device info
 - [ ] Two-finger scroll and right-click, pen support
