@@ -49,6 +49,13 @@ final class HIDTouchDriver {
     /// menu can show it without reaching into the driver's queue.
     var onStatusChange: ((DriverStatus) -> Void)?
 
+    /// Whether Input Monitoring was missing when the manager was opened.
+    ///
+    /// Denied permission does not always refuse the open: the device is found
+    /// and then simply never sends anything, which looks like working hardware
+    /// that does nothing. Remembered here so a connection can say so.
+    private var inputMonitoringMissing = false
+
     private var status = DriverStatus() {
         didSet {
             guard status != oldValue else { return }
@@ -166,6 +173,7 @@ final class HIDTouchDriver {
     func start() {
         guard let resolution = DisplayResolver.resolve(config.display) else {
             log("❌ No displays found — nothing to map touches onto.")
+            status = DriverStatus(failure: "No displays found")
             return
         }
         let display = resolution.display
@@ -210,14 +218,33 @@ final class HIDTouchDriver {
         // it already is, so an absolute position from us would fight it rather
         // than replace it. It takes the finger collection too, which is fine —
         // we handle that anyway, and macOS ignores the touchscreen.
+        inputMonitoringMissing =
+            IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) != kIOHIDAccessTypeGranted
+        if inputMonitoringMissing {
+            log("⚠️  Input Monitoring is not granted — the panel may be found but stay silent.")
+        }
+
         let options = config.penEnabled ? kIOHIDOptionsTypeSeizeDevice : kIOHIDOptionsTypeNone
         let result = IOHIDManagerOpen(manager, IOOptionBits(options))
         guard result == kIOReturnSuccess else {
-            log("❌ Could not open HID manager (code \(result))")
+            // Three different problems arrive here as three different codes, and
+            // the answer to each is different too, so they are told apart rather
+            // than reported as one "could not open".
+            let reason: String
+            switch result {
+            case kIOReturnNotPermitted, kIOReturnNotPrivileged:
+                reason = "Input Monitoring not granted"
+            case kIOReturnExclusiveAccess:
+                reason = "Another app is holding the panel"
+            default:
+                reason = String(format: "HID error 0x%08X", UInt32(bitPattern: result))
+            }
+            log("❌ Could not open HID manager: \(reason) (code \(result))")
             if config.penEnabled {
                 log("   Taking the device exclusively was refused; try --no-pen.")
             }
             log("   Grant 'Input Monitoring' in System Settings → Privacy & Security, then retry.")
+            status = DriverStatus(failure: reason)
             self.manager = nil
             return
         }
@@ -339,7 +366,11 @@ final class HIDTouchDriver {
         let product = IOHIDDeviceGetProperty(device, kIOHIDProductIDKey as CFString) as? Int ?? 0
         log("🔌 Connected: \"\(name)\"  VID 0x\(hex(vendor))  PID 0x\(hex(product))")
         status = DriverStatus(
-            isConnected: true, deviceName: name, vendorID: vendor, productID: product
+            isConnected: true,
+            deviceName: name,
+            vendorID: vendor,
+            productID: product,
+            failure: inputMonitoringMissing ? "Input Monitoring not granted" : nil
         )
     }
 
@@ -647,5 +678,5 @@ final class HIDTouchDriver {
 
     private func hex(_ value: Int) -> String { String(format: "%04X", value) }
 
-    private func log(_ message: String) { print(message) }
+    private func log(_ message: String) { Log.line(message) }
 }

@@ -123,6 +123,20 @@ final class SettingsModel: ObservableObject {
         DisplayResolver.resolve(settings.display, among: displays)?.display.name ?? "Touch display"
     }
 
+    /// The connection in one line, for the diagnostics pane.
+    ///
+    /// A stated reason replaces the state rather than sitting beside it: a
+    /// panel that is present but silent because a permission is missing is not
+    /// usefully described as "Connected".
+    var connectionSummary: String {
+        status.failure ?? (status.isConnected ? "Connected" : "Not connected")
+    }
+
+    /// The same judgement where the display's own name is the good news.
+    var displayStatusText: String {
+        status.failure ?? (status.isConnected ? displayName : "Not connected")
+    }
+
     func isGranted(_ permission: Permission) -> Bool { permissions[permission] ?? false }
 
     func grant(_ permission: Permission) {

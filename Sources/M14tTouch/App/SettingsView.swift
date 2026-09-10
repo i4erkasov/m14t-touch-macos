@@ -96,15 +96,27 @@ private struct SidebarMaterial: NSViewRepresentable {
 private struct GeneralSettings: View {
     @ObservedObject var model: SettingsModel
 
+    /// Green for working, orange for something the user can fix, grey for a
+    /// panel that simply is not there. The colour lives in the view because it
+    /// is a presentation choice; the model states the fact.
+    private var connectionTint: Color {
+        if model.status.failure != nil { return .orange }
+        return model.status.isConnected ? .green : .secondary
+    }
+
     var body: some View {
         Form {
             Section {
                 LabeledContent("Display") {
                     Label(
-                        model.status.isConnected ? model.displayName : "Not connected",
-                        systemImage: model.status.isConnected ? "circle.fill" : "circle"
+                        model.displayStatusText,
+                        systemImage: model.status.failure == nil && model.status.isConnected
+                            ? "circle.fill"
+                            : (model.status.failure == nil
+                                ? "circle"
+                                : "exclamationmark.triangle.fill")
                     )
-                    .foregroundStyle(model.status.isConnected ? .green : .secondary)
+                    .foregroundStyle(connectionTint)
                     .labelStyle(.titleAndIcon)
                     .imageScale(.small)
                 }
@@ -356,7 +368,7 @@ private struct DiagnosticsSettings: View {
                 LabeledContent("Display", value: model.displayName)
                 LabeledContent("Touch interface", value: model.status.deviceName ?? "—")
                 LabeledContent("Identifiers", value: model.status.identifiers ?? "—")
-                LabeledContent("Connection", value: model.status.isConnected ? "Connected" : "Not connected")
+                LabeledContent("Connection", value: model.connectionSummary)
             }
 
             Section("Displays") {

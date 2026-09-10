@@ -73,6 +73,14 @@ final class AppController: NSObject, NSApplicationDelegate {
             object: nil
         )
 
+        // Ask before starting, not after failing. Without Input Monitoring the
+        // HID manager refuses to open and the app can only sit there saying it
+        // is not connected; the prompt appears once per application, so this is
+        // the one moment it is worth spending.
+        if !PermissionsManager.isGranted(.inputMonitoring) {
+            PermissionsManager.request(.inputMonitoring)
+        }
+
         driver.setEnabled(settings.enabled)
         driver.start()
         updateStatusItemAppearance()
@@ -131,6 +139,24 @@ final class AppController: NSObject, NSApplicationDelegate {
             alert.informativeText = "The display chosen in Settings isn't connected."
             alert.runModal()
         }
+    }
+
+    /// The wording the driver uses for a denied Input Monitoring grant.
+    ///
+    /// Shared with the driver as a plain string rather than a type, because it
+    /// is also what the user reads; a mismatch here costs a click, not input.
+    static let inputMonitoringFailure = "Input Monitoring not granted"
+
+    @objc private func openInputMonitoringSettings() {
+        PermissionsManager.openSettings(for: .inputMonitoring)
+        // The grant only takes effect for a new process, so saying so here saves
+        // the user deciding that the permission did not work.
+        let alert = NSAlert()
+        alert.messageText = "Grant Input Monitoring, then reopen M14t Touch"
+        alert.informativeText = """
+            Add M14t Touch to the list and switch it on. macOS only applies the             change to a newly started app, so quit M14t Touch and open it again             afterwards.
+            """
+        alert.runModal()
     }
 
     @objc private func showSettings() {
@@ -241,16 +267,30 @@ extension AppController: NSMenuDelegate {
     /// enabled item with no action draws normally and still does nothing when
     /// clicked.
     private func connectionItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        // A line that names a missing permission should be the way to grant it,
+        // rather than sending the user to look for the pane themselves.
+        let fixable = status.failure == Self.inputMonitoringFailure
+        let item = NSMenuItem(
+            title: "",
+            action: fixable ? #selector(openInputMonitoringSettings) : nil,
+            keyEquivalent: ""
+        )
+        if fixable { item.target = self }
         item.isEnabled = true
 
-        let connected = status.isConnected
-        let text = NSMutableAttributedString(string: connected ? "● Connected" : "○ Not connected")
+        // A stated reason outranks the plain state: "Not connected" tells the
+        // user nothing they can do, and "Input Monitoring not granted" does.
+        let connected = status.isConnected && status.failure == nil
+        let title = status.failure.map { "● \($0)" }
+            ?? (connected ? "● Connected" : "○ Not connected")
+        let text = NSMutableAttributedString(string: title)
         // Only the dot carries the colour. Colouring the words as well would
         // make a status line shout.
         text.addAttribute(
             .foregroundColor,
-            value: connected ? NSColor.systemGreen : NSColor.tertiaryLabelColor,
+            value: status.failure != nil
+                ? NSColor.systemOrange
+                : (connected ? NSColor.systemGreen : NSColor.tertiaryLabelColor),
             range: NSRange(location: 0, length: 1)
         )
         text.addAttribute(

@@ -10,6 +10,15 @@ struct DriverStatus: Equatable {
     var vendorID: Int?
     var productID: Int?
 
+    /// Why there is no connection, when the reason is something the user could
+    /// act on rather than an unplugged cable.
+    ///
+    /// Without this the interface can only say "Not connected", which is the
+    /// same sentence for a panel that is absent, a permission that was never
+    /// granted and a device another process is holding — three problems with
+    /// three different answers.
+    var failure: String?
+
     /// The touch surface's width divided by its height, from the HID
     /// descriptor.
     ///
