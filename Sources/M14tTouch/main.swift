@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import CoreGraphics
 import ApplicationServices
@@ -52,6 +53,25 @@ func ensureAccessibilityOrExit(prompt: Bool) {
     exit(1)
 }
 
+/// Build the pipeline both the CLI and the app run.
+///
+/// Returns the controller alongside the engine because shutdown needs it
+/// directly: whoever stops the driver also has to give the pointer back.
+func makeEngine(for config: TouchConfig)
+    -> (engine: TouchEngine, cursorVisibility: CursorVisibilityController) {
+    let hiding = config.gestures.cursorHiding
+    let cursorVisibility = CursorVisibilityController(
+        policy: hiding,
+        visibility: hiding.hidesAnything ? PrivateCursorVisibility() : PublicCursorVisibility()
+    )
+    let engine = TouchEngine(
+        recognizer: config.mode.makeRecognizer(config: config),
+        emitter: RoutingEventEmitter(mouse: MouseEventEmitter(), scroll: ScrollEventEmitter()),
+        cursorVisibility: cursorVisibility
+    )
+    return (engine, cursorVisibility)
+}
+
 // MARK: - Dispatch
 
 let arguments = Array(CommandLine.arguments.dropFirst())
@@ -84,6 +104,19 @@ case .error(let message):
     print(ArgumentParser.usageText)
     exit(1)
 
+case .runApp(let config):
+    // Permissions are checked by the app itself in step 7, where it can show
+    // status and a button rather than exiting with a message nobody sees — a
+    // menu-bar app has no terminal to print to.
+    let (engine, cursorVisibility) = makeEngine(for: config)
+    let controller = AppController(
+        driver: HIDTouchDriver(config: config, engine: engine),
+        cursorVisibility: cursorVisibility
+    )
+    let app = NSApplication.shared
+    app.delegate = controller
+    app.run()
+
 case .run(let config):
     print(banner)
     printDisplays()
@@ -92,25 +125,14 @@ case .run(let config):
 
     ensureAccessibilityOrExit(prompt: config.promptForAccessibility)
 
+    let (engine, cursorVisibility) = makeEngine(for: config)
     let hiding = config.gestures.cursorHiding
-    let cursorVisibility = CursorVisibilityController(
-        policy: hiding,
-        visibility: hiding.hidesAnything ? PrivateCursorVisibility() : PublicCursorVisibility()
-    )
     if hiding.hidesAnything {
         print(cursorVisibility.isActive
               ? "🫥  Cursor hiding: \(hiding.rawValue)"
               : "🫥  Cursor hiding: '\(hiding.rawValue)' requested but unavailable — continuing without it")
     }
 
-    let engine = TouchEngine(
-        recognizer: config.mode.makeRecognizer(config: config),
-        emitter: RoutingEventEmitter(
-            mouse: MouseEventEmitter(),
-            scroll: ScrollEventEmitter()
-        ),
-        cursorVisibility: cursorVisibility
-    )
     let driver = HIDTouchDriver(config: config, engine: engine)
 
     // Held for the lifetime of the process: the signal sources stop firing when

@@ -1,5 +1,8 @@
 # Swift Package Manager
 .build/
+
+# Assembled application bundle (scripts/package-app.sh)
+build/
 .swiftpm/
 Package.resolved
 

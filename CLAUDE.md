@@ -33,7 +33,18 @@ swift build                 # debug build
 swift build -c release      # release build → .build/release/m14ttouch
 swift test                  # unit tests — REQUIRES full Xcode, see below
 ./scripts/verify-env.sh     # check the toolchain is set up correctly
+./scripts/package-app.sh    # assemble build/M14t Touch.app
 ```
+
+One binary, two shapes. A bare executable is the CLI; the same binary inside the
+bundle is the menu-bar app, decided by whether `Bundle.main.bundleIdentifier`
+matches the app's. `--app` forces the app shape from a terminal.
+
+**Develop against the CLI.** Input Monitoring and Accessibility are granted per
+binary, so the bundle is a separate identity from the terminal and needs its own
+grants — and an ad-hoc signature changes on every build, so a rebuilt bundle can
+look like a new, unpermitted application. `--app` gets the menu bar with the
+terminal's existing grants.
 
 Running the driver needs a connected M14t plus two macOS permissions
 (Input Monitoring, Accessibility), so it generally cannot be verified from an

@@ -10,6 +10,7 @@ enum ArgumentParser {
     /// action and exit.
     enum Outcome {
         case run(TouchConfig)
+        case runApp(TouchConfig)
         case listDisplays
         case resetCalibration
         case help
@@ -19,8 +20,20 @@ enum ArgumentParser {
     /// - Parameter defaults: the configuration arguments start from, so a flag
     ///   overrides a stored setting rather than the compiled default. Callers
     ///   that have no stored settings — every test here — get the defaults.
+    /// The application bundle's identifier, as `scripts/package-app.sh` writes it.
+    static let appBundleIdentifier = "com.m14ttouch.app"
+
+    /// Whether this process is the packaged application.
+    ///
+    /// Decided here rather than by a launch argument because a bundle cannot
+    /// pass one to itself. Matched against our own identifier rather than merely
+    /// checking for *a* bundle: the test runner is a bundle too, and treating
+    /// that as the app made every command-line test expect a menu bar.
+    static var isBundled: Bool { Bundle.main.bundleIdentifier == appBundleIdentifier }
+
     static func parse(_ arguments: [String], defaults: TouchConfig = TouchConfig()) -> Outcome {
         var config = defaults
+        var runAsApp = isBundled
         var iterator = arguments.makeIterator()
 
         func nextDouble() -> Double? {
@@ -95,6 +108,11 @@ enum ArgumentParser {
                 }
                 config.gestures.dragThreshold = v
 
+            // Lets the menu-bar app be run from a terminal during development,
+            // where its grants already exist and a rebuild does not look like a
+            // new application to the permission system.
+            case "--app":           runAsApp = true
+
             case "--invert-x":      config.invertX = true
             case "--invert-y":      config.invertY = true
             case "--debug":         config.debugMode = true
@@ -111,7 +129,7 @@ enum ArgumentParser {
             }
         }
 
-        return .run(config)
+        return runAsApp ? .runApp(config) : .run(config)
     }
 
     static let usageText = """
@@ -122,6 +140,8 @@ enum ArgumentParser {
       m14ttouch [OPTIONS]
 
     OPTIONS:
+      --app                Run as a menu-bar application rather than in the
+                           terminal. Implied when launched from an .app bundle
       --mode MODE          Touch behaviour (default: mouse)
                              mouse       finger drags the pointer
                              touchscreen tap to click, swipe to scroll,

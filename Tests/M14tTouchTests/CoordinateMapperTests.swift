@@ -133,6 +133,28 @@ final class ArgumentParserTests: XCTestCase {
         }
     }
 
+    func testTheAppFlagAsksForTheMenuBarApp() {
+        guard case .runApp = ArgumentParser.parse(["--app"]) else {
+            return XCTFail("expected a runApp outcome")
+        }
+    }
+
+    // Bundle detection is matched against our own identifier rather than merely
+    // checking for *a* bundle. The test runner is one too, and treating that as
+    // the app made every command-line test expect a menu bar.
+    func testTheTestRunnerIsNotMistakenForTheApp() {
+        XCTAssertFalse(ArgumentParser.isBundled)
+        guard case .run = ArgumentParser.parse([]) else {
+            return XCTFail("expected a run outcome")
+        }
+    }
+
+    func testTheAppFlagStillCarriesTheOtherOptions() {
+        guard case .runApp(let config) = ArgumentParser.parse(["--app", "--mode", "touchscreen"])
+        else { return XCTFail("expected a runApp outcome") }
+        XCTAssertEqual(config.mode, .touchscreen)
+    }
+
     func testHelpRecognized() {
         guard case .help = ArgumentParser.parse(["--help"]) else {
             return XCTFail("expected .help")
