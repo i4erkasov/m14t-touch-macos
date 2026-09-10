@@ -84,19 +84,35 @@ case .run(let config):
 
     ensureAccessibilityOrExit(prompt: config.promptForAccessibility)
 
+    let cursorVisibility = CursorVisibilityController(
+        enabled: config.gestures.hideCursorWhileTouching,
+        visibility: config.gestures.hideCursorWhileTouching
+            ? PrivateCursorVisibility()
+            : PublicCursorVisibility()
+    )
+    if config.gestures.hideCursorWhileTouching {
+        print(cursorVisibility.isActive
+              ? "🫥  Cursor hiding: on"
+              : "🫥  Cursor hiding: requested but unavailable — continuing without it")
+    }
+
     let engine = TouchEngine(
         recognizer: config.mode.makeRecognizer(config: config),
         emitter: RoutingEventEmitter(
             mouse: MouseEventEmitter(),
             scroll: ScrollEventEmitter()
-        )
+        ),
+        cursorVisibility: cursorVisibility
     )
     let driver = HIDTouchDriver(config: config, engine: engine)
 
     // Held for the lifetime of the process: the signal sources stop firing when
     // they are deallocated.
     let shutdownHandler = ShutdownHandler {
-        print("\n👋 Stopping — releasing any held contact.")
+        print("\n👋 Stopping — releasing any held contact and the pointer.")
+        // The pointer first: a hidden cursor is worse to be left with than a
+        // held button, and this is the only chance to give it back.
+        cursorVisibility.restore()
         driver.stop()
         exit(0)
     }

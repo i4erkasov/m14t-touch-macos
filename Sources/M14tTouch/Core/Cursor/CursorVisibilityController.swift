@@ -1,0 +1,46 @@
+import Foundation
+
+/// Decides when the pointer should be hidden, and keeps that decision balanced.
+///
+/// Sits between `TouchEngine` and whichever `CursorVisibility` is in force, so
+/// the engine says only "a finger is down" or "it is not" and never learns which
+/// implementation — public or private — is answering.
+///
+/// Hiding is asserted on every frame while a contact exists, because a single
+/// request does not hold. It is released once, on the frame the contact ends.
+final class CursorVisibilityController {
+
+    private let visibility: CursorVisibility
+    private let enabled: Bool
+    private var isHiding = false
+
+    init(enabled: Bool, visibility: CursorVisibility) {
+        self.enabled = enabled
+        self.visibility = visibility
+    }
+
+    /// Whether hiding will actually happen — switched on *and* supported.
+    var isActive: Bool { enabled && visibility.isAvailable }
+
+    /// Follow the contact state of the latest frame.
+    func update(isTouching: Bool) {
+        guard isActive else { return }
+        if isTouching {
+            isHiding = true
+            visibility.assertHidden()
+        } else if isHiding {
+            isHiding = false
+            visibility.release()
+        }
+    }
+
+    /// Give the pointer back unconditionally.
+    ///
+    /// Called on shutdown and when the device disappears. Deliberately does not
+    /// check `isHiding`: the point is to leave nothing hidden, and releasing
+    /// when nothing is held costs nothing.
+    func restore() {
+        isHiding = false
+        visibility.release()
+    }
+}

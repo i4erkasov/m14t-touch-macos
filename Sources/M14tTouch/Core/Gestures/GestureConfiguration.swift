@@ -56,6 +56,19 @@ struct GestureConfiguration: Equatable {
     /// arrow parked on a touchscreen does not.
     var restoreCursor: Bool = true
 
+    /// Hide the system pointer while a finger is on the panel.
+    ///
+    /// The spec amendment's "Cursor during touch: Hide while touching / Keep
+    /// visible". Off by default, and worth knowing why before switching it on:
+    /// the window server makes the pointer visible again the moment it moves, so
+    /// this only takes effect during the stationary part of a gesture. A scroll
+    /// qualifies once it is under way; a tap and a drag do not, because they move
+    /// the pointer by design.
+    ///
+    /// Requires a private API. When it is unavailable the setting is inert
+    /// rather than an error.
+    var hideCursorWhileTouching: Bool = false
+
     // MARK: Drag
 
     /// How long a contact must be held, without committing to a scroll, before

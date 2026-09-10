@@ -62,6 +62,9 @@ enum ArgumentParser {
                 }
                 config.gestures.scrollSensitivity = v
 
+            case "--hide-cursor":       config.gestures.hideCursorWhileTouching = true
+            case "--no-hide-cursor":    config.gestures.hideCursorWhileTouching = false
+
             case "--restore-cursor":    config.gestures.restoreCursor = true
             case "--no-restore-cursor": config.gestures.restoreCursor = false
 
@@ -130,6 +133,11 @@ enum ArgumentParser {
       --natural-scroll     Content follows the finger (default)
       --no-natural-scroll  Invert the scroll direction
       --long-press MS      Hold before a contact becomes a drag (default: 400)
+      --hide-cursor        Hide the pointer while a finger is on the panel.
+                           Needs a private API and only holds while the pointer
+                           is still, so it shows up during a scroll but not
+                           during a tap or a drag
+      --no-hide-cursor     Keep the pointer visible (default)
       --restore-cursor     Put the pointer back where it was when a gesture ends
                            (default)
       --no-restore-cursor  Leave the pointer where the gesture took it

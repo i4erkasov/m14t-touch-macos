@@ -11,10 +11,18 @@ final class TouchEngine {
 
     private var recognizer: any GestureRecognizer
     private let emitter: EventEmitter
+    private let cursorVisibility: CursorVisibilityController
 
-    init(recognizer: any GestureRecognizer, emitter: EventEmitter) {
+    init(
+        recognizer: any GestureRecognizer,
+        emitter: EventEmitter,
+        cursorVisibility: CursorVisibilityController = CursorVisibilityController(
+            enabled: false, visibility: PublicCursorVisibility()
+        )
+    ) {
         self.recognizer = recognizer
         self.emitter = emitter
+        self.cursorVisibility = cursorVisibility
     }
 
     /// Feed one frame, emitting whatever it completes.
@@ -25,6 +33,10 @@ final class TouchEngine {
     /// about logging.
     @discardableResult
     func process(_ frame: TouchFrame) -> [InputAction] {
+        // Before the actions, so a hide is in force by the time an event moves
+        // the pointer. Asserted every frame: one request does not hold.
+        cursorVisibility.update(isTouching: frame.primaryContact?.isTouching ?? false)
+
         let actions = recognizer.process(frame)
         actions.forEach(emitter.emit)
         return actions
@@ -34,6 +46,10 @@ final class TouchEngine {
     /// system clean. Called when the device disappears mid-gesture.
     @discardableResult
     func reset() -> [InputAction] {
+        // The device vanished mid-gesture; give the pointer back before anything
+        // else, since no further frame will arrive to do it.
+        cursorVisibility.restore()
+
         let actions = recognizer.reset()
         actions.forEach(emitter.emit)
         return actions
