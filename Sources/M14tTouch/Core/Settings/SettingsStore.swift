@@ -14,8 +14,18 @@ struct SettingsStore {
 
     let defaults: UserDefaults
 
-    /// The store the app uses.
-    static let shared = SettingsStore(defaults: .standard)
+    /// The store both shapes of the binary use.
+    ///
+    /// Pinned to an explicit suite rather than `.standard`, because that would
+    /// not be the same place twice: an unbundled binary keys its preferences on
+    /// the process name and a bundled one on the bundle identifier, so a setting
+    /// chosen in the menu bar would vanish when the same build ran from a
+    /// terminal, and the other way round. Observed, not hypothesised — the CLI
+    /// wrote to a domain called `m14ttouch` while the app would have read
+    /// `com.m14ttouch.app`.
+    static let shared = SettingsStore(
+        defaults: UserDefaults(suiteName: ArgumentParser.appBundleIdentifier) ?? .standard
+    )
 
     /// Saved settings, or `nil` if none exist or the stored value is unreadable.
     ///
