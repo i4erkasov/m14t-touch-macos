@@ -40,6 +40,11 @@ final class PrivateCursorVisibility: CursorVisibility {
     private static let maximumHides = 30_000
 
     private let backgroundHidingEnabled: Bool
+
+    /// Guards the count. It is touched from the touch queue on every frame and
+    /// from the main thread at shutdown, and losing a decrement there means a
+    /// pointer that never comes back.
+    private let lock = NSLock()
     private var hideCount = 0
 
     init() {
@@ -49,7 +54,10 @@ final class PrivateCursorVisibility: CursorVisibility {
     var isAvailable: Bool { backgroundHidingEnabled }
 
     func assertHidden() {
-        guard backgroundHidingEnabled, hideCount < Self.maximumHides else { return }
+        guard backgroundHidingEnabled else { return }
+        lock.lock()
+        defer { lock.unlock() }
+        guard hideCount < Self.maximumHides else { return }
         // Errors are deliberately ignored rather than propagated: a failure to
         // hide the pointer must never disturb touch handling (requirement 6).
         CGDisplayHideCursor(CGMainDisplayID())
@@ -57,9 +65,13 @@ final class PrivateCursorVisibility: CursorVisibility {
     }
 
     func release() {
-        guard hideCount > 0 else { return }
-        for _ in 0..<hideCount { CGDisplayShowCursor(CGMainDisplayID()) }
+        lock.lock()
+        let outstanding = hideCount
         hideCount = 0
+        lock.unlock()
+
+        guard outstanding > 0 else { return }
+        for _ in 0..<outstanding { CGDisplayShowCursor(CGMainDisplayID()) }
     }
 
     // MARK: - Private API resolution

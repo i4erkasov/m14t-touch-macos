@@ -184,6 +184,33 @@ final class HIDTouchDriver {
         }
     }
 
+    /// Take everything the user has chosen, from any thread.
+    ///
+    /// One entry point so the settings window does not have to know which knob
+    /// lives on which side of the queue. Thresholds and toggles reach the
+    /// recognizer by rebuilding it — they are read at construction, and a
+    /// recognizer mid-gesture with new rules would be neither the old behaviour
+    /// nor the new one.
+    func apply(_ settings: AppSettings) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.config.mode = settings.mode
+            self.config.gestures = settings.gestures
+            self.config.invertX = settings.invertX
+            self.config.invertY = settings.invertY
+            self.config.display = settings.display
+
+            self.mapper.invertX = settings.invertX
+            self.mapper.invertY = settings.invertY
+            if let resolved = DisplayResolver.resolve(settings.display) {
+                self.mapper.displayBounds = resolved.display.bounds
+            }
+
+            self.engine.setRecognizer(settings.mode.makeRecognizer(config: self.config))
+            self.engine.setEnabled(settings.enabled)
+        }
+    }
+
     /// Release any contact in progress and close the device.
     ///
     /// Quitting while a finger is down would otherwise leave the left button

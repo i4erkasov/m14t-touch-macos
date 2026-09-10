@@ -11,7 +11,12 @@ import Foundation
 final class CursorVisibilityController {
 
     private let visibility: CursorVisibility
-    private let policy: CursorHiding
+
+    /// Guards the policy and the hiding flag. The policy is changed from the
+    /// settings window on the main thread while the touch queue reads it on
+    /// every frame.
+    private let lock = NSLock()
+    private var policy: CursorHiding
     private var isHiding = false
 
     init(policy: CursorHiding, visibility: CursorVisibility) {
@@ -19,28 +24,50 @@ final class CursorVisibilityController {
         self.visibility = visibility
     }
 
+    /// Change when hiding applies, from any thread.
+    ///
+    /// Gives the pointer back when hiding is switched off, rather than leaving
+    /// it hidden until the next release that will now never come.
+    func setPolicy(_ replacement: CursorHiding) {
+        lock.lock()
+        let changed = replacement != policy
+        policy = replacement
+        lock.unlock()
+
+        guard changed else { return }
+        restore()
+    }
+
     /// Whether hiding will actually happen — asked for *and* supported.
-    var isActive: Bool { policy.hidesAnything && visibility.isAvailable }
+    var isActive: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return policy.hidesAnything && visibility.isAvailable
+    }
 
     /// Follow the latest frame.
     ///
     /// - Parameter isScrolling: whether the gesture has committed to scrolling.
     ///   Only meaningful for the `.scrolling` policy.
     func update(isTouching: Bool, isScrolling: Bool) {
-        guard isActive else { return }
-
+        lock.lock()
+        let active = policy.hidesAnything && visibility.isAvailable
         let wanted: Bool
         switch policy {
         case .never:     wanted = false
-        case .scrolling: wanted = isTouching && isScrolling
-        case .touching:  wanted = isTouching
+        case .scrolling: wanted = active && isTouching && isScrolling
+        case .touching:  wanted = active && isTouching
         }
+        let shouldRelease = !wanted && isHiding
+        isHiding = wanted
+        lock.unlock()
 
+        // The calls themselves are made outside the lock: they reach into
+        // CoreGraphics, and holding a lock across that would put the window
+        // server on the critical path of every frame.
         if wanted {
-            isHiding = true
             visibility.assertHidden()
-        } else if isHiding {
-            isHiding = false
+        } else if shouldRelease {
             visibility.release()
         }
     }
@@ -51,7 +78,9 @@ final class CursorVisibilityController {
     /// check `isHiding`: the point is to leave nothing hidden, and releasing
     /// when nothing is held costs nothing.
     func restore() {
+        lock.lock()
         isHiding = false
+        lock.unlock()
         visibility.release()
     }
 }

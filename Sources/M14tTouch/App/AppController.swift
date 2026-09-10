@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 
 /// The menu-bar application (spec §13).
 ///
@@ -10,6 +11,7 @@ import AppKit
 /// Everything here runs on the main thread. The driver runs on its own queue and
 /// the two meet in exactly two places: `onStatusChange`, which it delivers on
 /// main, and the `setEnabled`/`setMode` commands, which hop onto its queue.
+@MainActor
 final class AppController: NSObject, NSApplicationDelegate {
 
     private let driver: HIDTouchDriver
@@ -19,6 +21,8 @@ final class AppController: NSObject, NSApplicationDelegate {
     private var settings: AppSettings
     private var status = DriverStatus()
     private var statusItem: NSStatusItem?
+    private var settingsWindow: NSWindow?
+    private var settingsModel: SettingsModel?
 
     init(
         driver: HIDTouchDriver,
@@ -50,8 +54,15 @@ final class AppController: NSObject, NSApplicationDelegate {
         statusItem = item
 
         driver.onStatusChange = { [weak self] status in
-            self?.status = status
-            self?.updateStatusItemAppearance()
+            // The driver documents this as main-queue delivery, which is what
+            // makes the assumption safe; asserting it here rather than hopping
+            // again keeps the status honest about where it already is.
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.status = status
+                self.settingsModel?.update(status: status)
+                self.updateStatusItemAppearance()
+            }
         }
 
         driver.setEnabled(settings.enabled)
@@ -87,6 +98,43 @@ final class AppController: NSObject, NSApplicationDelegate {
         settings.mode = mode
         driver.setMode(mode)
         persist()
+        settingsModel?.settings.mode = mode
+    }
+
+    @objc private func showSettings() {
+        if settingsWindow == nil { makeSettingsWindow() }
+        // A menu-bar app is an accessory: without activating, its window opens
+        // behind whatever the user was looking at.
+        NSApp.activate(ignoringOtherApps: true)
+        settingsModel?.refresh()
+        settingsWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    private func makeSettingsWindow() {
+        let model = SettingsModel(settings: settings, status: status) { [weak self] updated in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                // The window is the source of truth while it is open, so the
+                // menu and the running driver both follow it.
+                self.settings = updated
+                self.driver.apply(updated)
+                self.cursorVisibility.setPolicy(updated.gestures.cursorHiding)
+                self.updateStatusItemAppearance()
+            }
+        }
+        settingsModel = model
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 460, height: 420),
+            styleMask: [.titled, .closable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "M14t Touch Settings"
+        window.contentView = NSHostingView(rootView: SettingsView(model: model))
+        window.isReleasedWhenClosed = false
+        window.center()
+        settingsWindow = window
     }
 
     private func persist() {
@@ -125,6 +173,13 @@ extension AppController: NSMenuDelegate {
             item.indentationLevel = 1
             menu.addItem(item)
         }
+
+        menu.addItem(.separator())
+        let settingsItem = NSMenuItem(
+            title: "Settings…", action: #selector(showSettings), keyEquivalent: ","
+        )
+        settingsItem.target = self
+        menu.addItem(settingsItem)
 
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(

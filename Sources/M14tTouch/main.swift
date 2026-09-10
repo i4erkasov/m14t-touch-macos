@@ -72,6 +72,9 @@ func makeEngine(for config: TouchConfig)
     return (engine, cursorVisibility)
 }
 
+/// Keeps the application delegate alive; `NSApplication` does not retain it.
+var appDelegate: AnyObject?
+
 // MARK: - Dispatch
 
 let arguments = Array(CommandLine.arguments.dropFirst())
@@ -109,14 +112,21 @@ case .runApp(let config):
     // status and a button rather than exiting with a message nobody sees — a
     // menu-bar app has no terminal to print to.
     let (engine, cursorVisibility) = makeEngine(for: config)
-    let controller = AppController(
-        driver: HIDTouchDriver(config: config, engine: engine),
-        cursorVisibility: cursorVisibility,
-        settings: storedSettings
-    )
-    let app = NSApplication.shared
-    app.delegate = controller
-    app.run()
+    // Top-level code in main.swift runs on the main thread but is not isolated
+    // to it, so the assumption has to be stated rather than inferred.
+    MainActor.assumeIsolated {
+        let controller = AppController(
+            driver: HIDTouchDriver(config: config, engine: engine),
+            cursorVisibility: cursorVisibility,
+            settings: storedSettings
+        )
+        let app = NSApplication.shared
+        app.delegate = controller
+        // Held for the process's lifetime: NSApplication does not retain its
+        // delegate, and losing it would take the menu with it.
+        appDelegate = controller
+        app.run()
+    }
 
 case .run(let config):
     print(banner)
