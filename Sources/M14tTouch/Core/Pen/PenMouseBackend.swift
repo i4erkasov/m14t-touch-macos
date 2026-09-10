@@ -84,7 +84,11 @@ final class PenMouseBackend: PenEventBackend {
     }
 
     private func emit(_ action: PenAction) {
-        for event in Self.mouseEvents(for: action, eraser: configuration.nearButtonTouch) {
+        for event in Self.mouseEvents(
+            for: action,
+            eraser: configuration.nearButtonTouch,
+            pointerFollowsHover: configuration.pointerFollowsHover
+        ) {
             poster.post(event.type, at: event.point)
         }
     }
@@ -99,7 +103,8 @@ final class PenMouseBackend: PenEventBackend {
     /// a screen the pen is not near (pen spec §11).
     static func mouseEvents(
         for action: PenAction,
-        eraser: PenTouchAction = .eraser
+        eraser: PenTouchAction = .eraser,
+        pointerFollowsHover: Bool = true
     ) -> [(type: CGEventType, point: CGPoint)] {
         // What an eraser stroke turns into. `eraser` is the honest answer of
         // "nothing macOS understands": applications learn about an eraser from a
@@ -113,7 +118,7 @@ final class PenMouseBackend: PenEventBackend {
 
         switch action {
         case .proximityEntered(let position), .hover(let position):
-            return [(.mouseMoved, position)]
+            return pointerFollowsHover ? [(.mouseMoved, position)] : []
 
         case .contactBegan(.tip, let position, _):
             return [(.leftMouseDown, position)]

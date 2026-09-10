@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import Foundation
 
@@ -76,6 +77,43 @@ final class SettingsModel: ObservableObject {
 
     func update(status: DriverStatus) {
         self.status = status
+    }
+
+    /// Put the diagnostics on the pasteboard, for pasting into a bug report.
+    ///
+    /// Plain text rather than a file: the point is to be able to paste it
+    /// somewhere, and a file would need saving, finding and attaching.
+    func copyDiagnostics() {
+        var lines = [
+            "M14t Touch diagnostics",
+            "",
+            "Device:      \(status.deviceName ?? "not connected")",
+            "Identifiers: \(status.identifiers ?? "—")",
+            "Mode:        \(settings.mode.rawValue)",
+            "Pen:         \(settings.penEnabled ? "handled" : "left to macOS")",
+        ]
+        if let calibration {
+            lines.append("Calibration: X \(Int(calibration.xMin))–\(Int(calibration.xMax))"
+                         + "  Y \(Int(calibration.yMin))–\(Int(calibration.yMax))")
+        } else {
+            lines.append("Calibration: none saved")
+        }
+        lines.append("")
+        lines.append("Displays:")
+        for display in displays {
+            lines.append("  \(Int(display.bounds.width)) × \(Int(display.bounds.height))"
+                         + " at \(Int(display.bounds.minX)), \(Int(display.bounds.minY))"
+                         + (display.isBuiltin ? "  (built-in)" : ""))
+        }
+        lines.append("")
+        lines.append("Permissions:")
+        for permission in Permission.allCases {
+            lines.append("  \(permission.title): \(isGranted(permission) ? "granted" : "missing")")
+        }
+
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(lines.joined(separator: "\n"), forType: .string)
     }
 
     func resetCalibration() {

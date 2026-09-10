@@ -101,14 +101,6 @@ final class AppController: NSObject, NSApplicationDelegate {
         updateStatusItemAppearance()
     }
 
-    @objc private func selectMode(_ sender: NSMenuItem) {
-        guard let mode = TouchMode(rawValue: sender.representedObject as? String ?? "") else { return }
-        settings.mode = mode
-        driver.setMode(mode)
-        persist()
-        settingsModel?.settings.mode = mode
-    }
-
     /// The user grants permissions in System Settings and comes back; nothing
     /// notifies us, so returning to the front is the cue to look again.
     @objc private func applicationBecameActive() {
@@ -169,8 +161,10 @@ final class AppController: NSObject, NSApplicationDelegate {
         settingsModel = model
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 640, height: 480),
-            styleMask: [.titled, .closable, .miniaturizable],
+            contentRect: NSRect(x: 0, y: 0, width: 720, height: 520),
+            // Resizable, because a settings window that cannot be resized is one
+            // more thing that does not behave like the rest of the system.
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
@@ -199,29 +193,20 @@ extension AppController: NSMenuDelegate {
         menu.autoenablesItems = false
         menu.removeAllItems()
 
-        menu.addItem(disabled(status.isConnected
-            ? "● \(status.deviceName ?? "Touch device") connected"
-            : "○ No touch device"))
+        // Device name, then its state beneath it, the way a status menu reads.
+        menu.addItem(disabled(status.deviceName ?? "ThinkVision M14t"))
+        menu.addItem(disabled(status.isConnected ? "● Connected" : "○ Not connected"))
         menu.addItem(.separator())
 
         let enable = NSMenuItem(
-            title: "Enable touch", action: #selector(toggleEnabled), keyEquivalent: ""
+            title: "Touch enabled", action: #selector(toggleEnabled), keyEquivalent: ""
         )
         enable.target = self
         enable.state = settings.enabled ? .on : .off
         menu.addItem(enable)
 
-        menu.addItem(.separator())
-        menu.addItem(disabled("Mode"))
-        for mode in TouchMode.allCases {
-            let item = NSMenuItem(title: title(for: mode), action: #selector(selectMode(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = mode.rawValue
-            item.state = settings.mode == mode ? .on : .off
-            item.indentationLevel = 1
-            menu.addItem(item)
-        }
-
+        // Mode moved to the settings window. A menu is for the handful of things
+        // wanted mid-task, and choosing a gesture model is not one of them.
         menu.addItem(.separator())
         let calibrate = NSMenuItem(
             title: "Calibrate…", action: #selector(startCalibration), keyEquivalent: ""
@@ -240,13 +225,6 @@ extension AppController: NSMenuDelegate {
         menu.addItem(NSMenuItem(
             title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"
         ))
-    }
-
-    private func title(for mode: TouchMode) -> String {
-        switch mode {
-        case .touchscreen: return "Touchscreen"
-        case .mouse:       return "Mouse"
-        }
     }
 
     private func disabled(_ title: String) -> NSMenuItem {

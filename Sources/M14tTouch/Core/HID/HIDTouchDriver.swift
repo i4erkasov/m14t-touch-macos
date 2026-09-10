@@ -101,6 +101,14 @@ final class HIDTouchDriver {
     private var penPressureRaw: Double = 0
     private var penBattery: Double?
 
+    /// A finger contact that began while the pen was near, and is therefore
+    /// being ignored for as long as it lasts (pen spec §15).
+    ///
+    /// Held until the finger lifts rather than cleared when the pen leaves: a
+    /// touch that was ignored must not spring to life halfway through, which
+    /// would be worse than ignoring it completely.
+    private var suppressingFingerContact = false
+
     /// Which collection an element belongs to, worked out once per element.
     ///
     /// Walking the parent chain on every value would mean doing it a hundred
@@ -330,7 +338,9 @@ final class HIDTouchDriver {
         let vendor  = IOHIDDeviceGetProperty(device, kIOHIDVendorIDKey  as CFString) as? Int ?? 0
         let product = IOHIDDeviceGetProperty(device, kIOHIDProductIDKey as CFString) as? Int ?? 0
         log("🔌 Connected: \"\(name)\"  VID 0x\(hex(vendor))  PID 0x\(hex(product))")
-        status = DriverStatus(isConnected: true, deviceName: name)
+        status = DriverStatus(
+            isConnected: true, deviceName: name, vendorID: vendor, productID: product
+        )
     }
 
     private func deviceRemoved() {
@@ -450,8 +460,25 @@ final class HIDTouchDriver {
             emitFrameIfUnbatched()
 
         case (HID.Page.digitizer.rawValue, HID.Digitizer.tipSwitch.rawValue):
+            let down = intVal != 0
+
+            // Palm rejection, decided the moment the finger lands rather than
+            // on every frame (pen spec §15). A hand resting on the panel to
+            // write with is the case this exists for; the pen's proximity is
+            // what tells it from a deliberate touch.
+            //
+            // The decision is made once and held for the life of the contact:
+            // a touch that was ignored must not spring to life halfway through
+            // because the pen moved away, which would be worse than ignoring it
+            // outright.
+            if down, !isTipSwitchDown {
+                suppressingFingerContact = config.pen.palmRejection && penInRange
+            } else if !down {
+                suppressingFingerContact = false
+            }
+
             // Contact changes are urgent — see the note on frame cadence.
-            isTipSwitchDown = intVal != 0
+            isTipSwitchDown = down
             emitFrame()
 
         case (HID.Page.digitizer.rawValue, HID.Digitizer.scanTime.rawValue):
@@ -570,6 +597,9 @@ final class HIDTouchDriver {
             pressure: nil,
             timestamp: ProcessInfo.processInfo.systemUptime
         )
+        // A contact that began under the pen stays ignored for its whole life.
+        if suppressingFingerContact { return }
+
         let frame = TouchFrame(contact: contact)
 
         if let frameObserver {

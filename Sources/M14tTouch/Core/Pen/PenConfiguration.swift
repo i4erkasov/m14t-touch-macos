@@ -47,6 +47,20 @@ enum PenTouchAction: String, CaseIterable, Codable {
 /// but that is the driver's problem, not the reader's.
 struct PenConfiguration: Equatable, Codable {
 
+    /// Move the pointer to the pen while it hovers, before it touches anything.
+    ///
+    /// On by default: seeing where the pen is about to land is most of what
+    /// hovering is for. Turning it off leaves the pointer alone until the pen
+    /// actually touches.
+    var pointerFollowsHover: Bool = true
+
+    /// Ignore finger touches while the pen is near the panel (pen spec §15).
+    ///
+    /// A hand resting on the screen to write with is the case this exists for.
+    /// Only new contacts are ignored — a finger already down when the pen
+    /// arrives keeps its gesture rather than having it cut in half.
+    var palmRejection: Bool = true
+
     /// The button furthest from the tip.
     ///
     /// Secondary click by default, as pen spec §25 proposes, and worth having
@@ -73,6 +87,8 @@ struct PenConfiguration: Equatable, Codable {
         func value<T: Decodable>(_ key: CodingKeys, _ fallback: T) -> T {
             (try? container.decodeIfPresent(T.self, forKey: key)) as? T ?? fallback
         }
+        pointerFollowsHover = value(.pointerFollowsHover, fallback.pointerFollowsHover)
+        palmRejection = value(.palmRejection, fallback.palmRejection)
         farButton = value(.farButton, fallback.farButton)
         nearButtonHover = value(.nearButtonHover, fallback.nearButtonHover)
         nearButtonTouch = value(.nearButtonTouch, fallback.nearButtonTouch)
