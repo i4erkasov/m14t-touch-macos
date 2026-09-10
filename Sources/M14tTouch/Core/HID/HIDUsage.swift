@@ -41,5 +41,6 @@ enum HID {
         case invert = 0x3C
         case barrelSwitch = 0x44
         case eraser = 0x45
+        case batteryStrength = 0x3B
     }
 }

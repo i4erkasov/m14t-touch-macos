@@ -81,6 +81,33 @@ final class HIDTouchDriver {
     /// arrives the driver cannot batch, so it publishes per value instead.
     private var reportsScanTime = false
 
+    // MARK: Pen
+    //
+    // The pen is a separate pipeline throughout (pen spec §4): its own mapper,
+    // because it counts in a different coordinate space from the finger; its own
+    // recognizer, because a pen states what it is doing rather than needing to be
+    // interpreted; and its own backend.
+    private var penMapper: CoordinateMapper
+    private var pen = PenRecognizer()
+    private let penBackend: PenEventBackend = PenMouseBackend()
+    private let penPressure = PressureScale.m14t
+
+    private var penRawX: Double = 0
+    private var penRawY: Double = 0
+    private var penInRange = false
+    private var penTipDown = false
+    private var penEraserDown = false
+    private var penButtons: PenButtons = []
+    private var penPressureRaw: Double = 0
+    private var penBattery: Double?
+
+    /// Which collection an element belongs to, worked out once per element.
+    ///
+    /// Walking the parent chain on every value would mean doing it a hundred
+    /// times a second for the same handful of elements; the cookie is stable for
+    /// the life of the device.
+    private var sourceByCookie: [IOHIDElementCookie: InputSource] = [:]
+
     /// While set, frames go here **instead of** the gesture engine.
     ///
     /// A diversion rather than a fork. Calibration needs to see touches without
@@ -103,9 +130,19 @@ final class HIDTouchDriver {
         // Provisional calibration; refined once the device is connected.
         let initial = CalibrationData.identity
 
+        let bounds = DisplayResolver.resolve(config.display)?.display.bounds ?? .zero
         self.mapper = CoordinateMapper(
             calibration: initial,
-            displayBounds: DisplayResolver.resolve(config.display)?.display.bounds ?? .zero,
+            displayBounds: bounds,
+            invertX: config.invertX,
+            invertY: config.invertY
+        )
+        // The pen's own space, which is not the finger's: 0…30931 × 0…17399
+        // against 0…12372 × 0…6960 (`M14t_PEN_CAPABILITIES.md`). Using one
+        // calibration for both would put the pen at a third of the screen.
+        self.penMapper = CoordinateMapper(
+            calibration: CalibrationData(xMin: 0, xMax: 30931, yMin: 0, yMax: 17399),
+            displayBounds: bounds,
             invertX: config.invertX,
             invertY: config.invertY
         )
@@ -124,6 +161,7 @@ final class HIDTouchDriver {
         }
         let display = resolution.display
         mapper.displayBounds = display.bounds
+        penMapper.displayBounds = display.bounds
         // Calibration belongs to a panel, so it is looked up and saved against
         // the display we are actually aiming at.
         calibrationController.displayIdentity = display.identity
@@ -158,9 +196,18 @@ final class HIDTouchDriver {
             HIDTouchDriver.from(ctx).handle(value)
         }, context)
 
-        let result = IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
+        // Seizing stops macOS handling the device itself. It has to be
+        // exclusive or nothing: the system moves the pointer relative to where
+        // it already is, so an absolute position from us would fight it rather
+        // than replace it. It takes the finger collection too, which is fine —
+        // we handle that anyway, and macOS ignores the touchscreen.
+        let options = config.penEnabled ? kIOHIDOptionsTypeSeizeDevice : kIOHIDOptionsTypeNone
+        let result = IOHIDManagerOpen(manager, IOOptionBits(options))
         guard result == kIOReturnSuccess else {
             log("❌ Could not open HID manager (code \(result))")
+            if config.penEnabled {
+                log("   Taking the device exclusively was refused; try --no-pen.")
+            }
             log("   Grant 'Input Monitoring' in System Settings → Privacy & Security, then retry.")
             self.manager = nil
             return
@@ -177,7 +224,9 @@ final class HIDTouchDriver {
             self?.log("🔌 HID manager closed")
         }
         IOHIDManagerActivate(manager)
-        log("✅ Listening for touch device…")
+        log(config.penEnabled
+            ? "✅ Listening — device held exclusively, so the pen is ours"
+            : "✅ Listening for touch device…")
     }
 
     /// Turn translation on or off, from any thread.
@@ -255,6 +304,7 @@ final class HIDTouchDriver {
         queue.sync {
             isTipSwitchDown = false
             logActions(engine.reset())
+            for action in pen.reset() { penBackend.handle(action) }
 
             guard let manager else { return }
             // Cancel rather than close: the queue-based API requires it, and it
@@ -285,6 +335,15 @@ final class HIDTouchDriver {
         // Release any held button so the cursor doesn't get stuck pressed.
         isTipSwitchDown = false
         logActions(engine.reset())
+
+        // The pen too: a stroke that never ends leaves a button pressed with no
+        // pen left to lift it (pen spec §35).
+        for action in pen.reset() { penBackend.handle(action) }
+        penInRange = false
+        penTipDown = false
+        penEraserDown = false
+        penButtons = []
+
         // Re-derive calibration from whichever device speaks up next.
         calibratedDevice = nil
         status = DriverStatus()
@@ -352,6 +411,19 @@ final class HIDTouchDriver {
 
     private func handle(_ value: IOHIDValue) {
         let element = IOHIDValueGetElement(value)
+
+        // Pen and finger are two collections of one device, so which pipeline a
+        // value belongs to is decided here and nowhere else (pen spec §4).
+        switch source(of: element) {
+        case .pen:
+            handlePen(value, element: element)
+            return
+        case .other:
+            return
+        case .finger:
+            break
+        }
+
         calibrateIfNeeded(from: IOHIDElementGetDevice(element))
 
         let page    = IOHIDElementGetUsagePage(element)
@@ -388,6 +460,83 @@ final class HIDTouchDriver {
 
         default:
             break
+        }
+    }
+
+    // MARK: - Pen
+
+    /// Which collection an element sits in, remembered per element.
+    private func source(of element: IOHIDElement) -> InputSource {
+        let cookie = IOHIDElementGetCookie(element)
+        if let known = sourceByCookie[cookie] { return known }
+
+        var collections: [(page: UInt32, usage: UInt32)] = []
+        var node = IOHIDElementGetParent(element)
+        while let current = node {
+            collections.insert(
+                (IOHIDElementGetUsagePage(current), IOHIDElementGetUsage(current)), at: 0
+            )
+            node = IOHIDElementGetParent(current)
+        }
+
+        let resolved = InputSource.from(collections: collections)
+        sourceByCookie[cookie] = resolved
+        return resolved
+    }
+
+    private func handlePen(_ value: IOHIDValue, element: IOHIDElement) {
+        let page = IOHIDElementGetUsagePage(element)
+        let usage = IOHIDElementGetUsage(element)
+        let raw = Double(IOHIDValueGetIntegerValue(value))
+
+        switch (page, usage) {
+        case (HID.Page.genericDesktop.rawValue, HID.GenericDesktop.x.rawValue): penRawX = raw
+        case (HID.Page.genericDesktop.rawValue, HID.GenericDesktop.y.rawValue): penRawY = raw
+        case (HID.Page.digitizer.rawValue, HID.Digitizer.inRange.rawValue):     penInRange = raw != 0
+        case (HID.Page.digitizer.rawValue, HID.Digitizer.tipSwitch.rawValue):   penTipDown = raw != 0
+        case (HID.Page.digitizer.rawValue, HID.Digitizer.eraser.rawValue):      penEraserDown = raw != 0
+        case (HID.Page.digitizer.rawValue, HID.Digitizer.tipPressure.rawValue): penPressureRaw = raw
+        case (HID.Page.digitizer.rawValue, HID.Digitizer.batteryStrength.rawValue):
+            penBattery = raw / 255
+        case (HID.Page.digitizer.rawValue, HID.Digitizer.barrelSwitch.rawValue):
+            penButtons = raw != 0 ? penButtons.union(.barrel) : penButtons.subtracting(.barrel)
+        case (HID.Page.digitizer.rawValue, HID.Digitizer.invert.rawValue):
+            penButtons = raw != 0 ? penButtons.union(.eraserMode) : penButtons.subtracting(.eraserMode)
+        default:
+            return                       // nothing else changes the pen's state
+        }
+
+        publishPenSample()
+    }
+
+    /// Publish the pen's current state.
+    ///
+    /// Per value rather than per report: unlike the finger's, the pen collection
+    /// carries no ScanTime to mark a boundary with. The cost is a pointer move to
+    /// an intermediate point when X and Y arrive separately, which is a fraction
+    /// of a pixel and invisible; the alternative would be assuming an order the
+    /// descriptor does not promise.
+    private func publishPenSample() {
+        // Contact comes from the switches, never from a pressure threshold: the
+        // panel reports non-zero pressure at transitions while nothing is
+        // touching (`M14t_PEN_CAPABILITIES.md`).
+        let tool: PenTool? = penEraserDown ? .eraser : (penTipDown ? .tip : nil)
+        let position = penMapper.map(rawX: penRawX, rawY: penRawY)
+
+        let sample = PenSample(
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            rawPosition: CGPoint(x: penRawX, y: penRawY),
+            position: position,
+            inProximity: penInRange,
+            contact: tool,
+            pressure: tool == nil ? nil : penPressure.normalize(penPressureRaw),
+            buttons: penButtons,
+            battery: penBattery
+        )
+
+        for action in pen.process(sample) {
+            if config.debugMode { log("✒️  \(action)") }
+            penBackend.handle(action)
         }
     }
 

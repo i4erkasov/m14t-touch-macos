@@ -10,6 +10,9 @@ struct TouchConfig {
     /// Which gesture model interprets the touch stream.
     var mode: TouchMode = .mouse
 
+    /// Handle the stylus, which requires taking the device from macOS.
+    var penEnabled: Bool = true
+
     /// Which display the panel is mapped to.
     ///
     /// Defaults to automatic — the first external display — rather than a fixed

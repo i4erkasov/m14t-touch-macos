@@ -118,6 +118,9 @@ enum ArgumentParser {
             // Lets the menu-bar app be run from a terminal during development,
             // where its grants already exist and a rebuild does not look like a
             // new application to the permission system.
+            case "--pen":           config.penEnabled = true
+            case "--no-pen":        config.penEnabled = false
+
             case "--app":           runAsApp = true
 
             case "--invert-x":      config.invertX = true
@@ -149,6 +152,11 @@ enum ArgumentParser {
     OPTIONS:
       --app                Run as a menu-bar application rather than in the
                            terminal. Implied when launched from an .app bundle
+      --no-pen             Leave the stylus to macOS. By default the driver
+                           takes the device exclusively, which is the only way
+                           to stop the pointer drifting to another screen while
+                           hovering — but it also means the pen does nothing
+                           when the driver is not running
       --mode MODE          Touch behaviour (default: mouse)
                              mouse       finger drags the pointer
                              touchscreen tap to click, swipe to scroll,
