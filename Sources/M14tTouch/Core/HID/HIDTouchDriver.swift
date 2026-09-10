@@ -312,6 +312,11 @@ final class HIDTouchDriver {
         queue.async { [weak self] in
             guard let self else { return }
             self.logsActions = enabled
+            if enabled {
+                // Forget what has been filed already, so turning logging on
+                // re-derives every element's routing and says what it decided.
+                self.sourceByCookie.removeAll()
+            }
             self.log(enabled ? "📝 Input logging on" : "📝 Input logging off")
         }
     }
@@ -674,6 +679,18 @@ final class HIDTouchDriver {
 
         let resolved = InputSource.from(collections: collections)
         sourceByCookie[cookie] = resolved
+
+        // Once per element, and only while logging: this is what distinguishes
+        // "the pen sends nothing" from "the pen sends and we file it wrongly",
+        // which look identical from outside and share no cause.
+        if logsActions {
+            let path = collections
+                .map { "0x\(hex(Int($0.page))):0x\(hex(Int($0.usage)))" }
+                .joined(separator: " > ")
+            log("🔍 element page=0x\(hex(Int(IOHIDElementGetUsagePage(element))))"
+                + " usage=0x\(hex(Int(IOHIDElementGetUsage(element))))"
+                + " in [\(path)] → \(resolved)")
+        }
         return resolved
     }
 
