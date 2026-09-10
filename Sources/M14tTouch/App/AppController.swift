@@ -169,7 +169,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         settingsModel = model
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 460, height: 420),
+            contentRect: NSRect(x: 0, y: 0, width: 640, height: 480),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false

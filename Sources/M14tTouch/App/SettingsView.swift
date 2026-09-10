@@ -12,7 +12,10 @@ struct SettingsView: View {
             PenTab(model: model).tabItem { Label("Pen", systemImage: "pencil.tip") }
             CalibrationTab(model: model).tabItem { Label("Calibration", systemImage: "scope") }
         }
-        .frame(width: 460, height: 420)
+        // Wide enough for every tab to be visible at once. At 460 the fourth
+        // tab pushed the row past the window and AppKit collapsed them behind a
+        // chevron, which hides the settings rather than organising them.
+        .frame(width: 640, height: 480)
     }
 }
 
