@@ -39,22 +39,32 @@ final class PrivateCursorVisibility: CursorVisibility {
     /// something is wrong, and refusing to grow it keeps the release loop finite.
     private static let maximumHides = 30_000
 
-    private let backgroundHidingEnabled: Bool
-
-    /// Guards the count. It is touched from the touch queue on every frame and
-    /// from the main thread at shutdown, and losing a decrement there means a
-    /// pointer that never comes back.
+    /// Guards the count and the lazily-resolved availability. The count is
+    /// touched from the touch queue on every frame and from the main thread at
+    /// shutdown, and losing a decrement there means a pointer that never comes
+    /// back.
     private let lock = NSLock()
     private var hideCount = 0
+    private var resolved: Bool?
 
-    init() {
-        backgroundHidingEnabled = Self.enableBackgroundHiding()
+    /// Whether the private path is usable, resolved on first ask and remembered.
+    ///
+    /// Lazily, so that constructing this costs nothing and touches no private
+    /// API until hiding is actually switched on. That is what lets the app hold
+    /// one of these from the start regardless of the setting — the alternative,
+    /// choosing the implementation at launch from the setting at launch, made
+    /// enabling hiding later do nothing at all.
+    var isAvailable: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if let resolved { return resolved }
+        let value = Self.enableBackgroundHiding()
+        resolved = value
+        return value
     }
 
-    var isAvailable: Bool { backgroundHidingEnabled }
-
     func assertHidden() {
-        guard backgroundHidingEnabled else { return }
+        guard isAvailable else { return }
         lock.lock()
         defer { lock.unlock() }
         guard hideCount < Self.maximumHides else { return }

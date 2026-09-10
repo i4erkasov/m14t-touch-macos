@@ -59,10 +59,12 @@ func ensureAccessibilityOrExit(prompt: Bool) {
 /// directly: whoever stops the driver also has to give the pointer back.
 func makeEngine(for config: TouchConfig)
     -> (engine: TouchEngine, cursorVisibility: CursorVisibilityController) {
-    let hiding = config.gestures.cursorHiding
+    // Always the private implementation, whatever the setting says right now:
+    // it resolves nothing until hiding is actually asked for, and choosing at
+    // launch from the setting at launch meant enabling hiding later did nothing.
     let cursorVisibility = CursorVisibilityController(
-        policy: hiding,
-        visibility: hiding.hidesAnything ? PrivateCursorVisibility() : PublicCursorVisibility()
+        policy: config.gestures.cursorHiding,
+        visibility: PrivateCursorVisibility()
     )
     let engine = TouchEngine(
         recognizer: config.mode.makeRecognizer(config: config),

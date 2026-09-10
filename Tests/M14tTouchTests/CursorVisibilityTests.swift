@@ -16,6 +16,7 @@ final class CursorVisibilityTests: XCTestCase {
         init(available: Bool = true) { isAvailable = available }
         func assertHidden() { assertions += 1 }
         func release() { releases += 1 }
+        func forgetCounts() { assertions = 0; releases = 0 }
     }
 
     private func makeController(policy: CursorHiding = .touching, available: Bool = true)
@@ -90,6 +91,32 @@ final class CursorVisibilityTests: XCTestCase {
         controller.update(isTouching: true, isScrolling: false)
         XCTAssertEqual(spy.assertions, 0)
         XCTAssertFalse(controller.isActive)
+    }
+
+    // The bug this guards: the implementation used to be chosen at launch from
+    // the setting at launch, so a controller that started with hiding off could
+    // never hide afterwards however the policy changed.
+    func testTurningHidingOnLaterActuallyHides() {
+        let (controller, spy) = makeController(policy: .never)
+        XCTAssertFalse(controller.isActive)
+
+        controller.setPolicy(.touching)
+        XCTAssertTrue(controller.isActive)
+
+        controller.update(isTouching: true, isScrolling: false)
+        XCTAssertEqual(spy.assertions, 1)
+    }
+
+    // Switching hiding off has to give the pointer back straight away: the
+    // release that would have come at the end of the gesture will now never
+    // happen.
+    func testTurningHidingOffReleasesImmediately() {
+        let (controller, spy) = makeController(policy: .touching)
+        controller.update(isTouching: true, isScrolling: false)
+        spy.forgetCounts()
+
+        controller.setPolicy(.never)
+        XCTAssertEqual(spy.releases, 1)
     }
 
     func testThePublicImplementationAdmitsItCannotHide() {
