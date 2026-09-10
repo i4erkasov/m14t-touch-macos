@@ -23,6 +23,29 @@ struct GestureConfiguration: Equatable, Codable {
     // were the same two numbers under different names. Spec §8 allows a better
     // UX than the one it sketches.
 
+    // MARK: Which gestures are recognised at all (spec §14, §21)
+
+    /// A short touch clicks.
+    var tapEnabled: Bool = true
+
+    /// A swipe scrolls.
+    ///
+    /// With this off a swipe does **nothing**: the contact is abandoned the
+    /// moment it travels past the threshold, and releasing produces no click.
+    /// That is deliberate rather than a gap — switching scrolling off is usually
+    /// a wish for swipes to have no effect, and turning them into clicks instead
+    /// would be a surprise.
+    var oneFingerScrollEnabled: Bool = true
+
+    /// Holding still becomes a drag.
+    ///
+    /// With this off the deadline is simply never reached, so a held contact
+    /// stays a possible tap however long it lasts and releasing still clicks.
+    /// Deliberately *not* the same treatment as scrolling: moving away is a
+    /// different gesture, whereas holding still is the same gesture done slowly,
+    /// and losing a click for being slow would be a poor trade.
+    var longPressDragEnabled: Bool = true
+
     // MARK: Scroll
 
     /// Movement, in screen pixels, that commits the gesture to scrolling
@@ -101,6 +124,9 @@ extension GestureConfiguration {
             (try? container.decodeIfPresent(T.self, forKey: key)) as? T ?? fallback
         }
 
+        tapEnabled = value(.tapEnabled, fallback.tapEnabled)
+        oneFingerScrollEnabled = value(.oneFingerScrollEnabled, fallback.oneFingerScrollEnabled)
+        longPressDragEnabled = value(.longPressDragEnabled, fallback.longPressDragEnabled)
         scrollThreshold = value(.scrollThreshold, fallback.scrollThreshold)
         scrollSensitivity = value(.scrollSensitivity, fallback.scrollSensitivity)
         naturalScroll = value(.naturalScroll, fallback.naturalScroll)

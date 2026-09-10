@@ -93,6 +93,13 @@ enum ArgumentParser {
             case "--restore-cursor":    config.gestures.restoreCursor = true
             case "--no-restore-cursor": config.gestures.restoreCursor = false
 
+            case "--tap":                  config.gestures.tapEnabled = true
+            case "--no-tap":               config.gestures.tapEnabled = false
+            case "--one-finger-scroll":    config.gestures.oneFingerScrollEnabled = true
+            case "--no-one-finger-scroll": config.gestures.oneFingerScrollEnabled = false
+            case "--long-press-drag":      config.gestures.longPressDragEnabled = true
+            case "--no-long-press-drag":   config.gestures.longPressDragEnabled = false
+
             case "--natural-scroll":    config.gestures.naturalScroll = true
             case "--no-natural-scroll": config.gestures.naturalScroll = false
 
@@ -159,6 +166,10 @@ enum ArgumentParser {
       --debug              Print every HID event and resulting action
 
     GESTURE TUNING (touchscreen mode):
+      --no-tap             A short touch does not click
+      --no-one-finger-scroll
+                           A swipe does nothing rather than scrolling
+      --no-long-press-drag Holding still stays a tap instead of becoming a drag
       --scroll-threshold N Movement that commits to scrolling, in pixels, and
                            so also the furthest a tap may wander (default: 10)
       --scroll-sensitivity N

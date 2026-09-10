@@ -402,3 +402,115 @@ final class CursorRestoreTests: XCTestCase {
         XCTAssertTrue(on.gestures.restoreCursor)
     }
 }
+
+/// Covers what switching a gesture off actually does (spec §14, §21). The three
+/// toggles do not all mean the same thing, and the difference is deliberate.
+final class GestureToggleTests: XCTestCase {
+
+    private func makeRecognizer(_ configure: (inout GestureConfiguration) -> Void)
+        -> TouchscreenRecognizer {
+        var c = GestureConfiguration()
+        c.scrollThreshold = 10
+        c.longPressDelay = 0.4
+        c.restoreCursor = false
+        configure(&c)
+        return TouchscreenRecognizer(configuration: c)
+    }
+
+    private func frame(_ x: CGFloat, _ y: CGFloat, touching: Bool, at time: TimeInterval) -> TouchFrame {
+        TouchFrame(contact: TouchPoint(
+            id: TouchPoint.primary,
+            position: CGPoint(x: x, y: y),
+            rawPosition: .zero,
+            isTouching: touching,
+            pressure: nil,
+            timestamp: time
+        ))
+    }
+
+    // MARK: - Tap
+
+    func testWithTapOffAReleaseClicksNothing() {
+        var recognizer = makeRecognizer { $0.tapEnabled = false }
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        XCTAssertEqual(recognizer.process(frame(100, 100, touching: false, at: 0.1)), [])
+    }
+
+    // Switching taps off must not switch scrolling off with them.
+    func testScrollingStillWorksWithTapOff() {
+        var recognizer = makeRecognizer { $0.tapEnabled = false }
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        XCTAssertEqual(recognizer.process(frame(100, 140, touching: true, at: 0.05)),
+                       [.pointerMove(position: CGPoint(x: 100, y: 100))])
+    }
+
+    // MARK: - Scroll
+
+    // A swipe does nothing at all — it does not fall back to being a click.
+    // Switching scrolling off is a wish for swipes to have no effect.
+    func testWithScrollOffASwipeDoesNothingAndDoesNotBecomeATap() {
+        var recognizer = makeRecognizer { $0.oneFingerScrollEnabled = false }
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        XCTAssertEqual(recognizer.process(frame(300, 300, touching: true, at: 0.05)), [])
+        XCTAssertEqual(recognizer.process(frame(400, 400, touching: true, at: 0.1)), [])
+        XCTAssertEqual(recognizer.process(frame(400, 400, touching: false, at: 0.15)), [])
+    }
+
+    func testAbandoningOneSwipeDoesNotSpoilTheNextTap() {
+        var recognizer = makeRecognizer { $0.oneFingerScrollEnabled = false }
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(400, 400, touching: true, at: 0.05))
+        _ = recognizer.process(frame(400, 400, touching: false, at: 0.1))
+
+        _ = recognizer.process(frame(700, 700, touching: true, at: 1.0))
+        XCTAssertEqual(recognizer.process(frame(700, 700, touching: false, at: 1.1)),
+                       [.tap(position: CGPoint(x: 700, y: 700))])
+    }
+
+    // A short touch is unaffected — only travelling far enough is.
+    func testTappingStillWorksWithScrollOff() {
+        var recognizer = makeRecognizer { $0.oneFingerScrollEnabled = false }
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        XCTAssertEqual(recognizer.process(frame(100, 100, touching: false, at: 0.1)),
+                       [.tap(position: CGPoint(x: 100, y: 100))])
+    }
+
+    // MARK: - Long press
+
+    // Deliberately unlike scrolling: moving away is a different gesture, whereas
+    // holding still is the same gesture done slowly, so a slow tap stays a tap
+    // rather than being thrown away.
+    func testWithLongPressOffHoldingStillRemainsATap() {
+        var recognizer = makeRecognizer { $0.longPressDragEnabled = false }
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        XCTAssertEqual(recognizer.process(frame(100, 100, touching: true, at: 3.0)), [])
+        XCTAssertEqual(recognizer.process(frame(100, 100, touching: false, at: 3.1)),
+                       [.tap(position: CGPoint(x: 100, y: 100))])
+    }
+
+    func testScrollingStillWorksWithLongPressOff() {
+        var recognizer = makeRecognizer { $0.longPressDragEnabled = false }
+        _ = recognizer.process(frame(100, 100, touching: true, at: 0))
+        _ = recognizer.process(frame(100, 140, touching: true, at: 0.5))
+        XCTAssertEqual(recognizer.process(frame(100, 190, touching: true, at: 0.6)),
+                       [.scroll(deltaX: 0, deltaY: 50)])
+    }
+
+    // MARK: - Defaults and flags
+
+    func testEverythingIsOnByDefault() {
+        let c = GestureConfiguration()
+        XCTAssertTrue(c.tapEnabled)
+        XCTAssertTrue(c.oneFingerScrollEnabled)
+        XCTAssertTrue(c.longPressDragEnabled)
+    }
+
+    func testTheFlagsTurnThemOff() {
+        guard case .run(let config) = ArgumentParser.parse(
+            ["--no-tap", "--no-one-finger-scroll", "--no-long-press-drag"]
+        ) else { return XCTFail("expected a run outcome") }
+        XCTAssertFalse(config.gestures.tapEnabled)
+        XCTAssertFalse(config.gestures.oneFingerScrollEnabled)
+        XCTAssertFalse(config.gestures.longPressDragEnabled)
+    }
+}

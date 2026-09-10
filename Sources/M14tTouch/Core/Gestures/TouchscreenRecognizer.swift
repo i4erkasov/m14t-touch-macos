@@ -29,6 +29,10 @@ struct TouchscreenRecognizer: GestureRecognizer {
         /// Committed to scrolling. Carries the point the last delta was
         /// measured from.
         case scrolling(lastPosition: CGPoint)
+
+        /// The contact did something this configuration does not recognise, and
+        /// nothing more will come of it until the finger lifts.
+        case abandoned
     }
 
     private var state: State = .idle
@@ -52,6 +56,7 @@ struct TouchscreenRecognizer: GestureRecognizer {
         case .possibleTap(let origin, let startedAt):
             guard contact.isTouching else {
                 state = .idle
+                guard configuration.tapEnabled else { return finishing(with: nil) }
                 // Reported at the point the finger landed, not where it left.
                 // The landing point is what the user aimed at; the release may
                 // have drifted a pixel or two.
@@ -63,7 +68,8 @@ struct TouchscreenRecognizer: GestureRecognizer {
             // to it — it is not the start of a scroll. In practice the ~100 Hz
             // tick notices the deadline long before a finger travels far, so
             // the two rarely compete in the same frame.
-            if contact.timestamp - startedAt > configuration.longPressDelay {
+            if configuration.longPressDragEnabled,
+               contact.timestamp - startedAt > configuration.longPressDelay {
                 // Grabbing at the landing point, as a tap reports its landing
                 // point: drift within the threshold is noise, and the user
                 // pressed on what was under their finger when it went down.
@@ -72,6 +78,13 @@ struct TouchscreenRecognizer: GestureRecognizer {
             }
 
             if distance(from: origin, to: contact.position) > configuration.scrollThreshold {
+                guard configuration.oneFingerScrollEnabled else {
+                    // Travelled too far to be a tap, and scrolling is switched
+                    // off, so nothing happens until the finger lifts.
+                    state = .abandoned
+                    return []
+                }
+
                 // Measured from where the finger is now, so the movement that
                 // committed to the scroll is consumed by the commitment rather
                 // than scrolling the page by the threshold distance.
@@ -123,6 +136,10 @@ struct TouchscreenRecognizer: GestureRecognizer {
             let sign = configuration.naturalScroll ? 1.0 : -1.0
             let scale = configuration.scrollSensitivity * sign
             return [.scroll(deltaX: deltaX * scale, deltaY: deltaY * scale)]
+
+        case .abandoned:
+            if !contact.isTouching { state = .idle }
+            return []
         }
     }
 
