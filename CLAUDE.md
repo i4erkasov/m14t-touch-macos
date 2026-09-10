@@ -128,6 +128,13 @@ assumption, and both worth knowing before promising them:
 
 Calibration precedence: manual flags > saved `~/.m14ttouch.json` > HID descriptor.
 
+## Investigated, not built
+
+- `docs/pinch-and-multitouch.md` — whether pinch-to-zoom is possible (spec §29).
+  Short version: a real `.magnify` event cannot be synthesised with public APIs,
+  ⌘ + scroll is the public substitute, and whether this panel even reports two
+  contacts has never been tested.
+
 ## Hardware facts
 
 Established by probing a real panel. `docs/v0.1-refactor-plan.md` records the
