@@ -99,11 +99,9 @@ private struct GeneralSettings: View {
     var body: some View {
         Form {
             Section {
-                LabeledContent("Device") {
+                LabeledContent("Display") {
                     Label(
-                        model.status.isConnected
-                            ? (model.status.deviceName ?? "Connected")
-                            : "Not connected",
+                        model.status.isConnected ? model.displayName : "Not connected",
                         systemImage: model.status.isConnected ? "circle.fill" : "circle"
                     )
                     .foregroundStyle(model.status.isConnected ? .green : .secondary)
@@ -335,7 +333,8 @@ private struct DiagnosticsSettings: View {
     var body: some View {
         Form {
             Section("Device") {
-                LabeledContent("Name", value: model.status.deviceName ?? "—")
+                LabeledContent("Display", value: model.displayName)
+                LabeledContent("Touch interface", value: model.status.deviceName ?? "—")
                 LabeledContent("Identifiers", value: model.status.identifiers ?? "—")
                 LabeledContent("Connection", value: model.status.isConnected ? "Connected" : "Not connected")
             }

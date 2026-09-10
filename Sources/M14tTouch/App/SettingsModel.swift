@@ -65,6 +65,11 @@ final class SettingsModel: ObservableObject {
         )
     }
 
+    /// What macOS calls the target display, for showing to a person.
+    var displayName: String {
+        DisplayResolver.resolve(settings.display, among: displays)?.display.name ?? "Touch display"
+    }
+
     func isGranted(_ permission: Permission) -> Bool { permissions[permission] ?? false }
 
     func grant(_ permission: Permission) {
@@ -87,7 +92,8 @@ final class SettingsModel: ObservableObject {
         var lines = [
             "M14t Touch diagnostics",
             "",
-            "Device:      \(status.deviceName ?? "not connected")",
+            "Display:     \(displayName)",
+            "Interface:   \(status.deviceName ?? "not connected")",
             "Identifiers: \(status.identifiers ?? "—")",
             "Mode:        \(settings.mode.rawValue)",
             "Pen:         \(settings.penEnabled ? "handled" : "left to macOS")",

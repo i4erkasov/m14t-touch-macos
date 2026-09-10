@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 
 /// A connected display, in a form convenient for logging and selection.
@@ -8,6 +9,22 @@ struct DisplayInfo: Equatable {
     let isMain: Bool
     let isBuiltin: Bool
     let identity: DisplayIdentity
+}
+
+extension DisplayInfo {
+
+    /// What macOS calls this display — "M14t", not the touch interface's own
+    /// name for itself.
+    ///
+    /// The HID product string is `Pen and multitouch sensor`, which describes an
+    /// interface rather than a thing anyone owns. This is the name shown beside
+    /// the monitor's picture in System Settings, and the one to put in front of
+    /// a person.
+    var name: String? {
+        NSScreen.screens.first {
+            $0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID == id
+        }?.localizedName
+    }
 }
 
 /// Which display was chosen, and on what grounds.

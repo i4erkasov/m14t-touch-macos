@@ -193,9 +193,11 @@ extension AppController: NSMenuDelegate {
         menu.autoenablesItems = false
         menu.removeAllItems()
 
-        // Device name, then its state beneath it, the way a status menu reads.
-        menu.addItem(disabled(status.deviceName ?? "ThinkVision M14t"))
-        menu.addItem(disabled(status.isConnected ? "● Connected" : "○ Not connected"))
+        // The monitor's name, not the touch interface's. "Pen and multitouch
+        // sensor" is what the HID descriptor calls itself; nobody owns one of
+        // those, they own an M14t.
+        menu.addItem(disabled(displayName))
+        menu.addItem(connectionItem())
         menu.addItem(.separator())
 
         let enable = NSMenuItem(
@@ -225,6 +227,41 @@ extension AppController: NSMenuDelegate {
         menu.addItem(NSMenuItem(
             title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"
         ))
+    }
+
+    /// The connection line, with a green dot when there is something to be
+    /// connected to.
+    ///
+    /// Enabled but without an action rather than disabled: macOS greys a
+    /// disabled item whole, colour and all, so the dot would be the same grey as
+    /// the word beside it and say nothing. With `autoenablesItems` off, an
+    /// enabled item with no action draws normally and still does nothing when
+    /// clicked.
+    private func connectionItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        item.isEnabled = true
+
+        let connected = status.isConnected
+        let text = NSMutableAttributedString(string: connected ? "● Connected" : "○ Not connected")
+        // Only the dot carries the colour. Colouring the words as well would
+        // make a status line shout.
+        text.addAttribute(
+            .foregroundColor,
+            value: connected ? NSColor.systemGreen : NSColor.tertiaryLabelColor,
+            range: NSRange(location: 0, length: 1)
+        )
+        text.addAttribute(
+            .foregroundColor,
+            value: NSColor.secondaryLabelColor,
+            range: NSRange(location: 1, length: text.length - 1)
+        )
+        item.attributedTitle = text
+        return item
+    }
+
+    /// What to call the panel in the menu.
+    private var displayName: String {
+        DisplayResolver.resolve(settings.display)?.display.name ?? "Touch display"
     }
 
     private func disabled(_ title: String) -> NSMenuItem {
