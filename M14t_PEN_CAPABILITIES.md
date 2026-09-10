@@ -156,6 +156,32 @@ Two consequences to design around:
   today it works badly. That is a visible change and belongs in the README.
 - the seizure ends with the process, as observed when the probe exited.
 
+## What the pipeline costs, measured
+
+Written down because a guess sent this in the wrong direction once. Drawing
+lagged after the pointer-return feature landed, and the explanation given at the
+time — that warping the pointer blocked the touch queue — is **wrong**. Every
+call on the per-sample path was then timed on this machine:
+
+| Call | Per call | At 200 samples/s |
+|---|---|---|
+| `CGEvent` create + `post` (one pen move) | 19.0 µs | 0.4% of one queue |
+| `CGDisplayHideCursor` (re-asserted per sample) | 15.9 µs | 0.3% |
+| `CGEvent(source:)?.location` (parking) | 0.3 µs | negligible |
+| `CGWarpMouseCursorPosition` | 39.2 µs | once per visit |
+| `CGAssociateMouseAndMouseCursorPosition` | 40.4 µs | once per visit |
+| `CGDisplayShowCursor` (release, per outstanding hide) | 2.3 µs | 6000 of them = 14 ms |
+
+So a pen sample costs ~35 µs of a queue that has 5000 µs to spend, and
+returning the pointer costs 80 µs *once*. Nothing here is a throughput problem,
+and the release loop — which looked alarming, since hover accumulates one hide
+per sample — is 14 ms after half a minute of hovering.
+
+What the delayed return actually fixed was **visible**, not temporal: the pen
+loses proximity on every lift between strokes, so the pointer was teleporting
+across the desk and back after each stroke. Before optimising this path, measure
+it; the numbers above are the baseline.
+
 ## Answers to the questions pen spec §42 requires
 
 1. Pen and finger collections — `Pen / Stylus` and `TouchScreen / Finger`, one device.
