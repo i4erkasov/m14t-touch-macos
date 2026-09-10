@@ -12,7 +12,7 @@ struct RoutingEventEmitter: EventEmitter {
 
     func emit(_ action: InputAction) {
         switch action {
-        case .scroll:
+        case .scroll, .scrollEnd:
             scroll.emit(action)
         case .tap, .pointerMove, .dragBegin, .dragMove, .dragEnd, .rightClick, .cursorRestore:
             mouse.emit(action)

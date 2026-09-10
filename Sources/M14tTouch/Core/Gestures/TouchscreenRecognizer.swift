@@ -119,7 +119,7 @@ struct TouchscreenRecognizer: GestureRecognizer {
         case .scrolling(let lastPosition):
             guard contact.isTouching else {
                 state = .idle
-                return finishing(with: nil)
+                return finishing(with: .scrollEnd)
             }
 
             // Note what is *not* here: the long-press deadline. That is the lock.
@@ -155,10 +155,19 @@ struct TouchscreenRecognizer: GestureRecognizer {
 
     mutating func reset() -> [InputAction] {
         defer { state = .idle }
-        // A drag is the only state holding a button down. Without this, unplugging
-        // mid-drag would strand it pressed.
-        guard case .dragging(let lastPosition) = state else { return [] }
-        return finishing(with: .dragEnd(position: lastPosition))
+        switch state {
+        // A drag is the only state holding a button down. Without this,
+        // unplugging mid-drag would strand it pressed.
+        case .dragging(let lastPosition):
+            return finishing(with: .dragEnd(position: lastPosition))
+        // A scroll holds no button, but it does hold an open gesture: leaving it
+        // open would make the next scroll a continuation of one that ended when
+        // the panel was unplugged.
+        case .scrolling:
+            return finishing(with: .scrollEnd)
+        case .idle, .possibleTap, .abandoned:
+            return []
+        }
     }
 
     /// Straight-line distance, unlike mouse mode's per-axis comparison.

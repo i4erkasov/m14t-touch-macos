@@ -54,6 +54,76 @@ final class ScrollEmissionTests: XCTestCase {
 
     // MARK: - Routing
 
+    // MARK: - Gesture phases
+
+    // Without a phase, pixel deltas are a mouse wheel: no rubber-banding, no
+    // smooth continuous scrolling in the apps that tell the two apart.
+    func testTheFirstEventOfAGestureBegins() {
+        var phases = ScrollPhaseTracker()
+        XCTAssertEqual(phases.delta(), .began)
+    }
+
+    func testEveryEventAfterTheFirstIsAChange() {
+        var phases = ScrollPhaseTracker()
+        _ = phases.delta()
+        XCTAssertEqual(phases.delta(), .changed)
+        XCTAssertEqual(phases.delta(), .changed)
+    }
+
+    func testLiftingEndsTheGesture() {
+        var phases = ScrollPhaseTracker()
+        _ = phases.delta()
+        XCTAssertEqual(phases.end(), .ended)
+    }
+
+    // A finger that lifted without ever moving a whole pixel: the accumulator
+    // swallowed every delta, so no gesture was ever opened and closing one
+    // would be a lie.
+    func testAGestureThatNeverStartedIsNotEnded() {
+        var phases = ScrollPhaseTracker()
+        XCTAssertNil(phases.end())
+    }
+
+    func testTheEndIsSentOnceEvenIfAskedTwice() {
+        var phases = ScrollPhaseTracker()
+        _ = phases.delta()
+        XCTAssertEqual(phases.end(), .ended)
+        XCTAssertNil(phases.end())
+    }
+
+    // The next scroll is a new gesture, not a continuation of the last one.
+    func testTheGestureAfterAnEndBeginsAgain() {
+        var phases = ScrollPhaseTracker()
+        _ = phases.delta()
+        _ = phases.end()
+        XCTAssertEqual(phases.delta(), .began)
+    }
+
+    // "First event" means the first one posted, not the first delta seen — a
+    // gesture whose `began` was swallowed by the accumulator would never begin.
+    func testTheBeginningIsNotSpentOnASwallowedDelta() {
+        var accumulator = ScrollAccumulator()
+        var phases = ScrollPhaseTracker()
+
+        XCTAssertNil(accumulator.take(x: 0, y: 0.4), "precondition: too small to post")
+        // Nothing was posted, so nothing has begun yet.
+        guard accumulator.take(x: 0, y: 0.7) != nil else {
+            return XCTFail("the accumulated delta should have crossed a pixel")
+        }
+        XCTAssertEqual(phases.delta(), .began)
+    }
+
+    func testTheEndActionReachesTheScrollEmitter() {
+        let mouse = RecordingEventEmitter()
+        let scroll = RecordingEventEmitter()
+        let router = RoutingEventEmitter(mouse: mouse, scroll: scroll)
+
+        router.emit(.scrollEnd)
+
+        XCTAssertEqual(scroll.actions, [.scrollEnd])
+        XCTAssertTrue(mouse.actions.isEmpty)
+    }
+
     func testScrollGoesToTheScrollEmitterAndNothingElseDoes() {
         let mouse = RecordingEventEmitter()
         let scroll = RecordingEventEmitter()

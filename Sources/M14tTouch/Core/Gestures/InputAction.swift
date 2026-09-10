@@ -30,6 +30,14 @@ enum InputAction: Equatable, Sendable {
     /// Not produced in v0.1 (spec §7.2, §23).
     case scroll(deltaX: CGFloat, deltaY: CGFloat)
 
+    /// The scrolling gesture is over — the finger has lifted.
+    ///
+    /// A separate action because macOS distinguishes a scroll *gesture* from a
+    /// wheel *turn*, and only the former gets rubber-banding and smooth
+    /// continuous scrolling. Telling it where the gesture ends is the price of
+    /// being treated as the first kind.
+    case scrollEnd
+
     /// Secondary click at a point.
     /// Not produced in v0.1 (spec §11).
     case rightClick(position: CGPoint)

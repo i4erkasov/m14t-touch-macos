@@ -74,7 +74,7 @@ final class TouchscreenRecognizerTests: XCTestCase {
         _ = recognizer.process(frame(100, 100, touching: true, at: 0))
         _ = recognizer.process(frame(140, 100, touching: true, at: 0.05))
         // The release ends the scroll; no click is produced.
-        XCTAssertEqual(recognizer.process(frame(140, 100, touching: false, at: 0.1)), [])
+        XCTAssertEqual(recognizer.process(frame(140, 100, touching: false, at: 0.1)), [.scrollEnd])
     }
 
     // Exactly at the threshold is not past it. v0.1 showed how easily a strict
@@ -103,7 +103,7 @@ final class TouchscreenRecognizerTests: XCTestCase {
         _ = recognizer.process(frame(100, 100, touching: true, at: 0))
         _ = recognizer.process(frame(200, 100, touching: true, at: 0.05))
         _ = recognizer.process(frame(100, 100, touching: true, at: 0.1))
-        XCTAssertEqual(recognizer.process(frame(100, 100, touching: false, at: 0.15)), [])
+        XCTAssertEqual(recognizer.process(frame(100, 100, touching: false, at: 0.15)), [.scrollEnd])
     }
 
     // MARK: - Time claims the contact
@@ -200,8 +200,8 @@ final class TouchscreenRecognizerTests: XCTestCase {
         // Further movement keeps scrolling rather than dragging.
         let actions = recognizer.process(frame(400, 500, touching: true, at: 2.1))
         XCTAssertEqual(actions, [.scroll(deltaX: 0, deltaY: 100)])
-        // And the release produces no dragEnd.
-        XCTAssertEqual(recognizer.process(frame(400, 500, touching: false, at: 2.2)), [])
+        // And the release ends the scroll rather than producing a dragEnd.
+        XCTAssertEqual(recognizer.process(frame(400, 500, touching: false, at: 2.2)), [.scrollEnd])
     }
 
     // Unplugging mid-drag has to release the button; nothing else will.
@@ -282,11 +282,19 @@ final class TouchscreenRecognizerTests: XCTestCase {
                        [.scroll(deltaX: -30, deltaY: -20)])
     }
 
-    // Nothing is held down during a scroll, so an unplug has nothing to release.
-    func testResetDuringAScrollEmitsNothing() {
+    // Nothing is held *down* during a scroll, but the gesture itself is open:
+    // leaving it open would make the next scroll a continuation of one that
+    // ended when the panel was unplugged.
+    func testResetDuringAScrollClosesTheGestureWithoutReleasingAButton() {
         var recognizer = makeRecognizer()
         _ = recognizer.process(frame(100, 100, touching: true, at: 0))
         _ = recognizer.process(frame(100, 140, touching: true, at: 0.05))
+        XCTAssertEqual(recognizer.reset(), [.scrollEnd])
+    }
+
+    // Nothing was under way, so there is nothing to close.
+    func testResetWhileIdleEmitsNothing() {
+        var recognizer = makeRecognizer()
         XCTAssertEqual(recognizer.reset(), [])
     }
 
@@ -368,12 +376,16 @@ final class CursorRestoreTests: XCTestCase {
                        [.dragEnd(position: CGPoint(x: 100, y: 100)), .cursorRestore])
     }
 
-    // A scroll emits nothing on release, so this is the only thing it emits.
+    // The restore comes last, after the gesture has been closed: the pointer
+    // goes home only once the scroll it was moved for is over.
     func testAScrollRestoresOnRelease() {
         var recognizer = makeRecognizer(restoring: true)
         _ = recognizer.process(frame(100, 100, touching: true, at: 0))
         _ = recognizer.process(frame(100, 140, touching: true, at: 0.05))
-        XCTAssertEqual(recognizer.process(frame(100, 140, touching: false, at: 0.2)), [.cursorRestore])
+        XCTAssertEqual(
+            recognizer.process(frame(100, 140, touching: false, at: 0.2)),
+            [.scrollEnd, .cursorRestore]
+        )
     }
 
     // Unplugging mid-drag must not strand the pointer on the panel either.
