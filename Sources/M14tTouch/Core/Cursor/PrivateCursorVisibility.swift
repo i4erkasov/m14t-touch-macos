@@ -20,9 +20,14 @@ import Foundation
 ///
 /// ## Safety
 /// Hides are reference counted per connection, so every one is counted here and
-/// released exactly. The count also dies with the connection, which is what
-/// limits the damage if the process is killed outright: no other process can
-/// release our hides, so nothing else can.
+/// released exactly.
+///
+/// What happens when the process is killed outright rests on that count dying
+/// with the connection. One staged test — 175 unbalanced hides, then SIGKILL —
+/// looked like the pointer came back on its own, but the observation was
+/// tentative and has not been repeated. Treat it as likely rather than
+/// established, and note that no other process can release these hides, so if
+/// the window server does not, nothing else will.
 final class PrivateCursorVisibility: CursorVisibility {
 
     private typealias MainConnectionID = @convention(c) () -> Int32
