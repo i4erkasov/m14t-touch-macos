@@ -44,8 +44,35 @@ rm -f "$DMG"
 hdiutil create -volname "$VOLUME_NAME" -srcfolder "$STAGE" \
     -ov -format UDZO -quiet "$DMG"
 
+# Notarization, when there is a Developer ID to notarize under. This is the
+# step that removes the manual dance on the other Mac entirely: Apple stamps the
+# image, `stapler` attaches the stamp to it, and Gatekeeper stops asking.
+#
+# Credentials are read from a keychain profile rather than passed here, so no
+# secret goes near this file or the shell history. Create it once with:
+#
+#   xcrun notarytool store-credentials m14ttouch \
+#       --apple-id <your Apple ID> --team-id <your team> --password <app-specific>
+NOTARY_PROFILE="${NOTARY_PROFILE:-m14ttouch}"
+
+if codesign -dv --verbose=2 "$APP" 2>&1 | grep -q "Developer ID Application"; then
+    if xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1; then
+        printf '\033[1mNotarizing\033[0m (a minute or two)\n'
+        xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait
+        xcrun stapler staple "$DMG"
+        echo "  Notarized and stapled — it opens on any Mac with no warning."
+    else
+        echo "  ⚠️  Signed with a Developer ID but no notary credentials found."
+        echo "     Run: xcrun notarytool store-credentials $NOTARY_PROFILE …"
+    fi
+fi
+
 printf '\033[32mBuilt %s\033[0m  (%s, %s)\n' \
     "$DMG" "$(du -h "$DMG" | cut -f1 | tr -d ' ')" "$ARCHS"
 echo
-echo "  Send that file. On the other Mac it needs one manual step to get past"
-echo "  Gatekeeper — the note inside the image says which."
+if xcrun stapler validate "$DMG" >/dev/null 2>&1; then
+    echo "  Send that file. It opens on any Mac without a warning."
+else
+    echo "  Send that file. On the other Mac it needs one manual step to get past"
+    echo "  Gatekeeper — the note inside the image says which."
+fi

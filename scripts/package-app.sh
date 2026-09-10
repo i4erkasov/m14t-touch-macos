@@ -62,10 +62,27 @@ PLIST
 # binary's exact bytes, so every rebuild is a new application that has to be
 # granted them again. A certificate gives a requirement the next build also
 # satisfies. `scripts/make-signing-identity.sh` creates a local one.
-IDENTITY="M14t Touch Local"
-if security find-identity -v -p codesigning 2>/dev/null | grep -q "$IDENTITY"; then
-    codesign --force --sign "$IDENTITY" --identifier "$BUNDLE_ID" "$DESTINATION" \
-        && echo "  Signed as \"$IDENTITY\" — permissions survive rebuilds."
+# A Developer ID first, because that is the only signature other Macs trust,
+# and it is the one notarization requires. The local self-signed identity is the
+# fallback for this machine; ad-hoc is the fallback for having neither.
+# `|| true` because not finding one is the normal case, and `set -e` would
+# otherwise treat grep's "no match" as a failure and stop the build here.
+DEVELOPER_ID="$(security find-identity -v -p codesigning 2>/dev/null \
+    | grep "Developer ID Application" | head -1 \
+    | sed -E 's/.*"(.*)"/\1/' || true)"
+LOCAL_IDENTITY="M14t Touch Local"
+
+if [ -n "$DEVELOPER_ID" ]; then
+    # The hardened runtime is required for notarization. It costs nothing here:
+    # nothing in this app injects, and the one private symbol is resolved from a
+    # system framework, which the hardened runtime allows.
+    codesign --force --options runtime --timestamp \
+        --sign "$DEVELOPER_ID" --identifier "$BUNDLE_ID" "$DESTINATION" \
+        && echo "  Signed with \"$DEVELOPER_ID\" — ready to notarize."
+elif security find-identity -v -p codesigning 2>/dev/null | grep -q "$LOCAL_IDENTITY"; then
+    codesign --force --sign "$LOCAL_IDENTITY" --identifier "$BUNDLE_ID" "$DESTINATION" \
+        && echo "  Signed as \"$LOCAL_IDENTITY\" — permissions survive rebuilds here,"
+    echo "  but other Macs will not trust it. See README, \"Sharing it\"."
 else
     codesign --force --sign - --identifier "$BUNDLE_ID" "$DESTINATION" 2>/dev/null \
         || echo "  (codesign unavailable — the bundle is unsigned)"

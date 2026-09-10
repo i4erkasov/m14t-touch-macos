@@ -235,9 +235,41 @@ Then Input Monitoring and Accessibility, as above. Sending them a later build
 signed with the same certificate keeps those grants: the designated requirement
 does not change.
 
-Removing that step entirely needs a Developer ID from the Apple Developer
-Program (99 USD/year) and notarization — nothing in the build stands in the way,
-it is only the certificate that is missing.
+### Removing the manual step
+
+It takes a **Developer ID**, from the Apple Developer Program (99 USD/year). The
+build is already prepared for it and nothing else has to change:
+
+1. Create a *Developer ID Application* certificate and install it. `package-app.sh`
+   prefers it over the local one automatically and signs with the hardened
+   runtime, which notarization requires.
+2. Store notary credentials once, so no secret ever reaches a script:
+
+   ```bash
+   xcrun notarytool store-credentials m14ttouch \
+       --apple-id <your Apple ID> --team-id <your team> --password <app-specific>
+   ```
+
+3. `./scripts/make-dmg.sh` then notarizes and staples the image by itself, and
+   says so. The result opens on any Mac with no warning at all.
+
+Permissions still have to be granted by whoever runs it — that is true of every
+app, notarized or not — but they are granted once and survive your updates,
+because a Developer ID signature does not change between builds.
+
+### The Mac App Store is not an option
+
+Not for want of a certificate. A store app must be sandboxed, and the sandbox
+forbids three things this driver is built on:
+
+- taking the panel exclusively (`kIOHIDOptionsTypeSeizeDevice`), without which
+  macOS keeps the pen for itself and drags the pointer around relatively;
+- Accessibility, without which no `CGEvent` can be posted — no pointer, no
+  clicks, no scrolling;
+- the one private call used to hide the cursor, which review rejects outright.
+
+Every comparable utility — Bartender, BetterTouchTool, Karabiner — ships outside
+the store for the same reasons.
 
 
 ## Calibration
