@@ -24,6 +24,19 @@ import Foundation
 ///
 /// A device that reports no `ScanTime` falls back to a frame per value, which is
 /// what v0.1 did throughout.
+///
+/// ## Threading
+/// Everything after `start()` happens on one serial queue: IOKit is told to
+/// deliver callbacks there, so the driver's state, the recognizer's state and
+/// event emission are all confined to it without a lock in sight (spec §25).
+///
+/// The main thread is left free. That mattered little for a CLI, where it only
+/// ran an idle run loop, and matters a great deal once SwiftUI shares it —
+/// frames arrive around a hundred times a second and must not compete with
+/// drawing (spec §24).
+///
+/// `start()` and `stop()` are the only members meant to be called from
+/// elsewhere, and both hop onto the queue to touch anything.
 final class HIDTouchDriver {
 
     private var config: TouchConfig
@@ -31,6 +44,12 @@ final class HIDTouchDriver {
 
     // IOKit
     private var manager: IOHIDManager?
+
+    /// The queue every callback and all mutable state lives on.
+    ///
+    /// `userInteractive` because this is the latency path: a frame late is a
+    /// cursor that lags the finger.
+    private let queue = DispatchQueue(label: "com.m14ttouch.touch", qos: .userInteractive)
 
     // Coordinate state
     private var mapper: CoordinateMapper
@@ -71,7 +90,10 @@ final class HIDTouchDriver {
 
     // MARK: - Lifecycle
 
-    /// Open the HID manager and begin listening. Blocks via the caller's run loop.
+    /// Open the HID manager and begin listening.
+    ///
+    /// Returns immediately; delivery happens on the driver's own queue, and the
+    /// caller's run loop is only needed to keep the process alive.
     func start() {
         guard let resolution = DisplayResolver.resolve(config.display) else {
             log("❌ No displays found — nothing to map touches onto.")
@@ -110,15 +132,26 @@ final class HIDTouchDriver {
             HIDTouchDriver.from(ctx).handle(value)
         }, context)
 
-        IOHIDManagerScheduleWithRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
-
         let result = IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
-        if result == kIOReturnSuccess {
-            log("✅ Listening for touch device…")
-        } else {
+        guard result == kIOReturnSuccess else {
             log("❌ Could not open HID manager (code \(result))")
             log("   Grant 'Input Monitoring' in System Settings → Privacy & Security, then retry.")
+            self.manager = nil
+            return
         }
+
+        // Delivery on a queue rather than a run loop: the modern IOKit path, and
+        // the one that lets the pipeline own a thread instead of borrowing the
+        // main one. Must be set before activating.
+        IOHIDManagerSetDispatchQueue(manager, queue)
+        IOHIDManagerSetCancelHandler(manager) { [weak self] in
+            // The manager must stay alive until this runs, so the reference is
+            // dropped here rather than at the call to cancel.
+            self?.manager = nil
+            self?.log("🔌 HID manager closed")
+        }
+        IOHIDManagerActivate(manager)
+        log("✅ Listening for touch device…")
     }
 
     /// Release any contact in progress and close the device.
@@ -127,13 +160,20 @@ final class HIDTouchDriver {
     /// pressed: the release is normally emitted when the finger lifts or the
     /// device disappears, and process termination is neither.
     func stop() {
-        isTipSwitchDown = false
-        logActions(engine.reset())
+        // Synchronous so the release is posted before the caller exits the
+        // process. Safe from the main thread, which is the only caller; calling
+        // it from the queue itself would deadlock, and nothing does.
+        queue.sync {
+            isTipSwitchDown = false
+            logActions(engine.reset())
 
-        guard let manager else { return }
-        IOHIDManagerUnscheduleFromRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
-        IOHIDManagerClose(manager, IOOptionBits(kIOHIDOptionsTypeNone))
-        self.manager = nil
+            guard let manager else { return }
+            // Cancel rather than close: the queue-based API requires it, and it
+            // is what stops further callbacks arriving. The reference is
+            // released in the cancel handler, not here — the object has to
+            // outlive the cancellation.
+            IOHIDManagerCancel(manager)
+        }
     }
 
     /// Recover `self` from the opaque pointer passed to C callbacks.
