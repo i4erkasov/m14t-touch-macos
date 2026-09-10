@@ -1,12 +1,11 @@
 import Foundation
 
-/// What a pen button or the eraser does (pen spec §24).
+/// What a pen button does (pen spec §24).
 ///
 /// A deliberately short list. The spec sketches a dozen possibilities —
 /// modifiers, undo, keyboard shortcuts, pan — and §30 says a control appears
-/// only when it changes runtime behaviour. These three are the ones that work
-/// through the mouse fallback today; the rest wait for a backend that can carry
-/// them.
+/// only when it changes runtime behaviour. These are the ones that work through
+/// the mouse fallback today; the rest wait for a backend that can carry them.
 enum PenButtonMapping: String, CaseIterable, Codable {
     case none
     case leftClick
@@ -23,35 +22,60 @@ enum PenButtonMapping: String, CaseIterable, Codable {
     }
 }
 
+/// What the near button does when the pen is also touching the screen.
+enum PenTouchAction: String, CaseIterable, Codable {
+    /// What the hardware itself does: the panel reports an eraser stroke rather
+    /// than a tip one.
+    case eraser
+    /// Treat it as an ordinary stroke, indistinguishable from the tip.
+    case primaryClick
+    case none
+
+    var title: String {
+        switch self {
+        case .eraser:       return "Eraser"
+        case .primaryClick: return "Primary click"
+        case .none:         return "Nothing"
+        }
+    }
+}
+
 /// How the stylus behaves.
+///
+/// Described in terms of the two buttons a user can see and press. The panel
+/// expresses the near one through `Invert` and `Eraser` rather than as a button,
+/// but that is the driver's problem, not the reader's.
 struct PenConfiguration: Equatable, Codable {
 
-    /// The button furthest from the tip — the only one free to be mapped.
+    /// The button furthest from the tip.
     ///
-    /// Secondary click by default: it is the mapping pen spec §25 proposes, and
-    /// the one worth having, since both buttons work while merely hovering, so a
-    /// context menu can be opened without touching the screen at all.
-    var barrelButton: PenButtonMapping = .rightClick
+    /// Secondary click by default, as pen spec §25 proposes, and worth having
+    /// because both buttons work while merely hovering — a context menu without
+    /// touching the screen at all.
+    var farButton: PenButtonMapping = .rightClick
 
-    /// What a stroke of the eraser end does.
+    /// The near button, pressed and released without touching the screen.
     ///
-    /// Nothing by default, and that is not indecision. There is no gesture in
-    /// macOS that means "erase"; applications that support one learn it from a
-    /// tablet event carrying an eraser pointer type, which the mouse fallback
-    /// cannot send. Until the tablet backend is proven, the honest options are
-    /// to do nothing or to behave like the tip, and doing nothing is less
-    /// surprising than silently drawing with the wrong end.
-    var eraser: PenButtonMapping = .none
+    /// Acts on release rather than on press, and only when no contact happened
+    /// in between. Otherwise reaching to erase something would fire this first
+    /// and the eraser stroke second, which is not what anyone means by holding a
+    /// button and drawing.
+    var nearButtonHover: PenButtonMapping = .rightClick
+
+    /// The near button, held while the pen touches the screen.
+    var nearButtonTouch: PenTouchAction = .eraser
 
     /// Decoded field by field so a mapping added later cannot make an older
     /// saved file undecodable — the same reason the other settings do it.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let fallback = PenConfiguration()
-        barrelButton = (try? container.decodeIfPresent(PenButtonMapping.self, forKey: .barrelButton))
-            .flatMap { $0 } ?? fallback.barrelButton
-        eraser = (try? container.decodeIfPresent(PenButtonMapping.self, forKey: .eraser))
-            .flatMap { $0 } ?? fallback.eraser
+        func value<T: Decodable>(_ key: CodingKeys, _ fallback: T) -> T {
+            (try? container.decodeIfPresent(T.self, forKey: key)) as? T ?? fallback
+        }
+        farButton = value(.farButton, fallback.farButton)
+        nearButtonHover = value(.nearButtonHover, fallback.nearButtonHover)
+        nearButtonTouch = value(.nearButtonTouch, fallback.nearButtonTouch)
     }
 
     init() {}

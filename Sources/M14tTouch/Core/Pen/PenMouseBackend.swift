@@ -18,6 +18,16 @@ final class PenMouseBackend: PenEventBackend {
     private let poster = CGEventPoster()
     private var configuration: PenConfiguration
     private var heldButtons: PenButtons = []
+    private var lastPosition: CGPoint = .zero
+
+    /// Whether the near button has been held through a contact.
+    ///
+    /// The near button means two things and they must not both happen. Held
+    /// while touching, it erases; pressed and released in the air, it performs
+    /// whatever it is mapped to. So the hover action waits for the release and
+    /// is cancelled the moment a contact begins — otherwise reaching to erase
+    /// something would fire a secondary click on the way.
+    private var nearButtonUsedForContact = false
 
     init(configuration: PenConfiguration = PenConfiguration()) {
         self.configuration = configuration
@@ -27,32 +37,55 @@ final class PenMouseBackend: PenEventBackend {
         // Release anything the old mapping was holding, or a button mapped away
         // mid-press would stay down with nothing left to release it.
         if heldButtons.contains(.barrel) {
-            release(self.configuration.barrelButton, at: lastPosition)
+            release(self.configuration.farButton, at: lastPosition)
         }
         heldButtons = []
+        nearButtonUsedForContact = false
         self.configuration = configuration
     }
-
-    private var lastPosition: CGPoint = .zero
 
     func handle(_ action: PenAction) {
         if let position = Self.position(of: action) { lastPosition = position }
 
         switch action {
         case .buttonsChanged(let buttons, let position):
-            // Only the far button is mapped. The near one is not a button at all
-            // — it is what makes a stroke an eraser stroke — and giving it an
-            // action of its own would fight the tool it selects.
-            let wasHeld = heldButtons.contains(.barrel)
-            let isHeld = buttons.contains(.barrel)
-            heldButtons = buttons
-            if isHeld, !wasHeld { press(configuration.barrelButton, at: position) }
-            if wasHeld, !isHeld { release(configuration.barrelButton, at: position) }
+            handleButtons(buttons, at: position)
+
+        case .contactBegan(let tool, _, _):
+            // A contact settles what the near button meant this time.
+            if tool == .eraser { nearButtonUsedForContact = true }
+            emit(action)
 
         default:
-            for event in Self.mouseEvents(for: action, eraser: configuration.eraser) {
-                poster.post(event.type, at: event.point)
+            emit(action)
+        }
+    }
+
+    private func handleButtons(_ buttons: PenButtons, at position: CGPoint) {
+        let farWasHeld = heldButtons.contains(.barrel)
+        let farIsHeld = buttons.contains(.barrel)
+        let nearWasHeld = heldButtons.contains(.eraserMode)
+        let nearIsHeld = buttons.contains(.eraserMode)
+        heldButtons = buttons
+
+        if farIsHeld, !farWasHeld { press(configuration.farButton, at: position) }
+        if farWasHeld, !farIsHeld { release(configuration.farButton, at: position) }
+
+        if nearIsHeld, !nearWasHeld { nearButtonUsedForContact = false }
+        if nearWasHeld, !nearIsHeld {
+            // Released. If nothing was touched while it was held, it was a press
+            // of a button rather than a choice of tool.
+            if !nearButtonUsedForContact {
+                press(configuration.nearButtonHover, at: position)
+                release(configuration.nearButtonHover, at: position)
             }
+            nearButtonUsedForContact = false
+        }
+    }
+
+    private func emit(_ action: PenAction) {
+        for event in Self.mouseEvents(for: action, eraser: configuration.nearButtonTouch) {
+            poster.post(event.type, at: event.point)
         }
     }
 
@@ -66,8 +99,18 @@ final class PenMouseBackend: PenEventBackend {
     /// a screen the pen is not near (pen spec §11).
     static func mouseEvents(
         for action: PenAction,
-        eraser: PenButtonMapping = .none
+        eraser: PenTouchAction = .eraser
     ) -> [(type: CGEventType, point: CGPoint)] {
+        // What an eraser stroke turns into. `eraser` is the honest answer of
+        // "nothing macOS understands": applications learn about an eraser from a
+        // tablet event this backend cannot send, so the stroke produces no
+        // events at all rather than silently drawing with the wrong end.
+        let mapping: PenButtonMapping
+        switch eraser {
+        case .eraser, .none: mapping = .none
+        case .primaryClick:  mapping = .leftClick
+        }
+
         switch action {
         case .proximityEntered(let position), .hover(let position):
             return [(.mouseMoved, position)]
@@ -80,11 +123,11 @@ final class PenMouseBackend: PenEventBackend {
             return [(.leftMouseUp, position)]
 
         case .contactBegan(.eraser, let position, _):
-            return down(eraser).map { [($0, position)] } ?? []
+            return down(mapping).map { [($0, position)] } ?? []
         case .contactMoved(.eraser, let position, _):
-            return dragged(eraser).map { [($0, position)] } ?? []
+            return dragged(mapping).map { [($0, position)] } ?? []
         case .contactEnded(.eraser, let position):
-            return up(eraser).map { [($0, position)] } ?? []
+            return up(mapping).map { [($0, position)] } ?? []
 
         case .proximityExited, .buttonsChanged:
             return []

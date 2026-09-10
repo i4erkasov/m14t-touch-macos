@@ -118,7 +118,7 @@ enum ArgumentParser {
             // Lets the menu-bar app be run from a terminal during development,
             // where its grants already exist and a rebuild does not look like a
             // new application to the permission system.
-            case "--pen-button", "--pen-eraser":
+            case "--pen-far-button", "--pen-near-hover":
                 guard let raw = iterator.next() else {
                     return .error("\(arg) requires a value")
                 }
@@ -126,8 +126,18 @@ enum ArgumentParser {
                     let known = PenButtonMapping.allCases.map(\.rawValue).joined(separator: ", ")
                     return .error("Unknown mapping '\(raw)' — expected one of: \(known)")
                 }
-                if arg == "--pen-button" { config.pen.barrelButton = mapping }
-                else { config.pen.eraser = mapping }
+                if arg == "--pen-far-button" { config.pen.farButton = mapping }
+                else { config.pen.nearButtonHover = mapping }
+
+            case "--pen-near-touch":
+                guard let raw = iterator.next() else {
+                    return .error("--pen-near-touch requires a value")
+                }
+                guard let action = PenTouchAction(rawValue: raw) else {
+                    let known = PenTouchAction.allCases.map(\.rawValue).joined(separator: ", ")
+                    return .error("Unknown action '\(raw)' — expected one of: \(known)")
+                }
+                config.pen.nearButtonTouch = action
 
             case "--pen":           config.penEnabled = true
             case "--no-pen":        config.penEnabled = false
@@ -163,9 +173,15 @@ enum ArgumentParser {
     OPTIONS:
       --app                Run as a menu-bar application rather than in the
                            terminal. Implied when launched from an .app bundle
-      --pen-button ACTION  What the far stylus button does (default: rightClick)
-      --pen-eraser ACTION  What a stroke of the eraser end does (default: none)
+      --pen-far-button ACTION
+                           The far stylus button (default: rightClick)
+      --pen-near-hover ACTION
+                           The near button, pressed without touching the screen
+                           (default: rightClick)
                              none, leftClick, rightClick, middleClick
+      --pen-near-touch ACTION
+                           The near button, held while touching
+                             eraser (default), primaryClick, none
       --no-pen             Leave the stylus to macOS. By default the driver
                            takes the device exclusively, which is the only way
                            to stop the pointer drifting to another screen while

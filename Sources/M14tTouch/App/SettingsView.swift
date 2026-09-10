@@ -167,20 +167,28 @@ private struct PenTab: View {
             }
 
             if model.settings.penEnabled {
-                Section("Buttons") {
-                    Picker("Far button", selection: $model.settings.pen.barrelButton) {
+                Section("Near button") {
+                    Picker("While hovering", selection: $model.settings.pen.nearButtonHover) {
                         ForEach(PenButtonMapping.allCases, id: \.self) { Text($0.title).tag($0) }
                     }
-                    Text("The button nearest the tip is not listed: it is not a button. Holding it makes the panel report an eraser stroke, so it selects a tool rather than performing an action.")
+                    Picker("While touching", selection: $model.settings.pen.nearButtonTouch) {
+                        ForEach(PenTouchAction.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    Text("The hovering action happens when you release the button without having touched the screen, so reaching to erase something does not click on the way.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if model.settings.pen.nearButtonTouch == .eraser {
+                        Text("Eraser strokes reach applications that understand a tablet eraser. Nothing else responds to them yet — choose Primary click if you would rather it drew.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
-                Section("Eraser") {
-                    Picker("A stroke of the eraser", selection: $model.settings.pen.eraser) {
+                Section("Far button") {
+                    Picker("Action", selection: $model.settings.pen.farButton) {
                         ForEach(PenButtonMapping.allCases, id: \.self) { Text($0.title).tag($0) }
                     }
-                    Text("Nothing, by default. macOS has no gesture meaning \"erase\" — applications that support one learn it from a tablet event this driver cannot yet send.")
+                    Text("Works while hovering, so a context menu can be opened without touching the screen.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
