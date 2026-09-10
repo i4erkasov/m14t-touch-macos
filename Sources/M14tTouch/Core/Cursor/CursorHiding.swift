@@ -3,7 +3,7 @@ import Foundation
 /// When the system pointer should be hidden while the panel is in use.
 ///
 /// The spec amendment's "Cursor during touch" setting.
-enum CursorHiding: String, CaseIterable {
+enum CursorHiding: String, CaseIterable, Codable {
 
     /// Leave the pointer alone.
     case never

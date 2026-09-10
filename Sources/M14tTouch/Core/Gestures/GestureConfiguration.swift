@@ -6,7 +6,7 @@ import Foundation
 /// because they are what the Settings window will edit in v0.3 — and because
 /// step 8 of v0.2 exists to tune them against the panel. The defaults below are
 /// **starting guesses**, not measurements.
-struct GestureConfiguration: Equatable {
+struct GestureConfiguration: Equatable, Codable {
 
     // MARK: Tap
     //
@@ -81,4 +81,32 @@ struct GestureConfiguration: Equatable {
     /// Unrelated to the touchscreen thresholds above and deliberately much
     /// smaller — mouse mode has no gesture to decide, only noise to reject.
     var dragThreshold: Double = 1.5
+}
+
+// MARK: - Storage
+
+extension GestureConfiguration {
+
+    /// Decoded field by field, each falling back to its default.
+    ///
+    /// The synthesised decoder would require every field to be present, so
+    /// adding one setting in a later version would make an older saved file
+    /// undecodable and silently reset *all* of them. Spec §28 schedules settings
+    /// migration for v0.6; not creating the problem is cheaper than migrating it.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let fallback = GestureConfiguration()
+
+        func value<T: Decodable>(_ key: CodingKeys, _ fallback: T) -> T {
+            (try? container.decodeIfPresent(T.self, forKey: key)) as? T ?? fallback
+        }
+
+        scrollThreshold = value(.scrollThreshold, fallback.scrollThreshold)
+        scrollSensitivity = value(.scrollSensitivity, fallback.scrollSensitivity)
+        naturalScroll = value(.naturalScroll, fallback.naturalScroll)
+        restoreCursor = value(.restoreCursor, fallback.restoreCursor)
+        cursorHiding = value(.cursorHiding, fallback.cursorHiding)
+        longPressDelay = value(.longPressDelay, fallback.longPressDelay)
+        dragThreshold = value(.dragThreshold, fallback.dragThreshold)
+    }
 }

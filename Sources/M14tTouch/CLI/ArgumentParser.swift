@@ -16,8 +16,11 @@ enum ArgumentParser {
         case error(String)
     }
 
-    static func parse(_ arguments: [String]) -> Outcome {
-        var config = TouchConfig()
+    /// - Parameter defaults: the configuration arguments start from, so a flag
+    ///   overrides a stored setting rather than the compiled default. Callers
+    ///   that have no stored settings — every test here — get the defaults.
+    static func parse(_ arguments: [String], defaults: TouchConfig = TouchConfig()) -> Outcome {
+        var config = defaults
         var iterator = arguments.makeIterator()
 
         func nextDouble() -> Double? {

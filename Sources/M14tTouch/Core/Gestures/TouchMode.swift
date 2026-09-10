@@ -6,7 +6,7 @@ import Foundation
 /// touchscreen mode in v0.2 means writing a recognizer and returning it from
 /// `makeRecognizer` — the driver, the engine, the emitters and the CLI stay as
 /// they are.
-enum TouchMode: String, CaseIterable {
+enum TouchMode: String, CaseIterable, Codable {
 
     /// The original behaviour: contact presses the left button, movement drags,
     /// release releases. Kept permanently as the compatibility fallback.

@@ -53,7 +53,12 @@ func ensureAccessibilityOrExit(prompt: Bool) {
 
 let arguments = Array(CommandLine.arguments.dropFirst())
 
-switch ArgumentParser.parse(arguments) {
+// Stored preferences first, command-line flags over the top. Nothing writes
+// these yet — the settings window does, in v0.3 step 6 — so today this is the
+// defaults unless the value was put there by hand.
+let storedSettings = SettingsStore.shared.loadOrDefault()
+
+switch ArgumentParser.parse(arguments, defaults: storedSettings.touchConfig) {
 
 case .help:
     print(ArgumentParser.usageText)
