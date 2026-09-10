@@ -23,7 +23,7 @@ final class SettingsTests: XCTestCase {
     private func makeSettings() -> AppSettings {
         var settings = AppSettings()
         settings.mode = .touchscreen
-        settings.displayIndex = 2
+        settings.display = .index(2)
         settings.invertY = true
         settings.gestures.scrollSensitivity = 2.5
         settings.gestures.cursorHiding = .scrolling
@@ -56,13 +56,13 @@ final class SettingsTests: XCTestCase {
     // them all because one key is missing.
     func testAFileMissingKeysKeepsTheOnesItHas() throws {
         let json = """
-        { "mode": "touchscreen", "displayIndex": 3 }
+        { "mode": "touchscreen", "display": { "index": 3 } }
         """
         defaults.set(Data(json.utf8), forKey: "settings")
 
         let loaded = try XCTUnwrap(store.load())
         XCTAssertEqual(loaded.mode, .touchscreen)
-        XCTAssertEqual(loaded.displayIndex, 3)
+        XCTAssertEqual(loaded.display.index, 3)
         XCTAssertEqual(loaded.invertY, AppSettings().invertY)
         XCTAssertEqual(loaded.gestures, GestureConfiguration())
     }
@@ -104,13 +104,13 @@ final class SettingsTests: XCTestCase {
 
     func testStoredSettingsSurviveWhenNoArgumentsAreGiven() {
         var stored = AppSettings()
-        stored.displayIndex = 4
+        stored.display = .index(4)
         stored.invertX = true
 
         guard case .run(let config) = ArgumentParser.parse([], defaults: stored.touchConfig)
         else { return XCTFail("expected a run outcome") }
 
-        XCTAssertEqual(config.displayIndex, 4)
+        XCTAssertEqual(config.display.index, 4)
         XCTAssertTrue(config.invertX)
     }
 }

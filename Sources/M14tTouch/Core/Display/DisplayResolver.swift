@@ -1,11 +1,30 @@
 import CoreGraphics
 
 /// A connected display, in a form convenient for logging and selection.
-struct DisplayInfo {
+struct DisplayInfo: Equatable {
     let index: Int
     let id: CGDirectDisplayID
     let bounds: CGRect
     let isMain: Bool
+    let isBuiltin: Bool
+    let identity: DisplayIdentity
+}
+
+/// Which display was chosen, and on what grounds.
+struct DisplayResolution: Equatable {
+    let display: DisplayInfo
+    let match: Match
+
+    enum Match: Equatable {
+        /// Found the display the user picked.
+        case identity
+        /// Matched by position, which is all there was to go on.
+        case index
+        /// Nothing was asked for: the first external display, or the main one.
+        case automatic
+        /// What was asked for is not connected.
+        case unavailable
+    }
 }
 
 /// Thin wrapper over CoreGraphics' display enumeration.
@@ -27,21 +46,54 @@ enum DisplayResolver {
                 index: i,
                 id: ids[i],
                 bounds: CGDisplayBounds(ids[i]),
-                isMain: CGDisplayIsMain(ids[i]) != 0
+                isMain: CGDisplayIsMain(ids[i]) != 0,
+                isBuiltin: CGDisplayIsBuiltin(ids[i]) != 0,
+                identity: DisplayIdentity(
+                    vendor: CGDisplayVendorNumber(ids[i]),
+                    model: CGDisplayModelNumber(ids[i]),
+                    serial: CGDisplaySerialNumber(ids[i])
+                )
             )
         }
     }
 
-    /// Resolve the bounds for a requested display index.
+    /// Pick the display a selection refers to.
     ///
-    /// Falls back to the main display if the index is out of range, returning
-    /// the index actually used so the caller can warn the user.
-    static func bounds(forIndex index: Int) -> (bounds: CGRect, resolvedIndex: Int) {
-        let displays = all()
-        guard !displays.isEmpty else { return (.zero, 0) }
-        if index >= 0, index < displays.count {
-            return (displays[index].bounds, index)
+    /// Pure over the list it is given, so the precedence can be tested without
+    /// monitors: **identity, then index, then the first external display**.
+    ///
+    /// External first, because the panel this driver exists for is by definition
+    /// not the built-in screen, and because spec §32 forbids the hardcoded index
+    /// that used to stand here.
+    static func resolve(_ selection: DisplaySelection, among displays: [DisplayInfo]) -> DisplayResolution? {
+        guard let fallback = displays.first(where: { !$0.isBuiltin }) ?? displays.first else {
+            return nil
         }
-        return (displays[0].bounds, 0)
+
+        if let identity = selection.identity, identity.isUsable {
+            if let match = displays.first(where: { $0.identity == identity }) {
+                return DisplayResolution(display: match, match: .identity)
+            }
+            // Asked for a display that is not here. Say so rather than silently
+            // aiming somewhere else — spec §30 expects a reconnect to restore the
+            // old target, and quietly picking a different screen hides that it
+            // did not.
+            return DisplayResolution(display: fallback, match: .unavailable)
+        }
+
+        if let index = selection.index {
+            if let match = displays.first(where: { $0.index == index }) {
+                return DisplayResolution(display: match, match: .index)
+            }
+            return DisplayResolution(display: fallback, match: .unavailable)
+        }
+
+        return DisplayResolution(display: fallback, match: .automatic)
     }
+
+    /// The same, against the displays connected right now.
+    static func resolve(_ selection: DisplaySelection) -> DisplayResolution? {
+        resolve(selection, among: all())
+    }
+
 }

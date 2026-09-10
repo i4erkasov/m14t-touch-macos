@@ -61,10 +61,9 @@ final class HIDTouchDriver {
         // Provisional calibration; refined once the device is connected.
         let initial = CalibrationData.identity
 
-        let (bounds, _) = DisplayResolver.bounds(forIndex: config.displayIndex)
         self.mapper = CoordinateMapper(
             calibration: initial,
-            displayBounds: bounds,
+            displayBounds: DisplayResolver.resolve(config.display)?.display.bounds ?? .zero,
             invertX: config.invertX,
             invertY: config.invertY
         )
@@ -74,12 +73,20 @@ final class HIDTouchDriver {
 
     /// Open the HID manager and begin listening. Blocks via the caller's run loop.
     func start() {
-        let (bounds, resolvedIndex) = DisplayResolver.bounds(forIndex: config.displayIndex)
-        mapper.displayBounds = bounds
-        if resolvedIndex != config.displayIndex {
-            log("⚠️  Display index \(config.displayIndex) out of range — using [\(resolvedIndex)]")
+        guard let resolution = DisplayResolver.resolve(config.display) else {
+            log("❌ No displays found — nothing to map touches onto.")
+            return
         }
-        log("🖥️  Target display [\(resolvedIndex)]: \(Int(bounds.width))×\(Int(bounds.height)) @ (\(Int(bounds.minX)),\(Int(bounds.minY)))")
+        let display = resolution.display
+        mapper.displayBounds = display.bounds
+
+        switch resolution.match {
+        case .identity:    break
+        case .index:       break
+        case .automatic:   log("🖥️  No display chosen — using the first external one")
+        case .unavailable: log("⚠️  The chosen display is not connected — using [\(display.index)] instead")
+        }
+        log("🖥️  Target display [\(display.index)]: \(Int(display.bounds.width))×\(Int(display.bounds.height)) @ (\(Int(display.bounds.minX)),\(Int(display.bounds.minY)))")
 
         let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
         self.manager = manager

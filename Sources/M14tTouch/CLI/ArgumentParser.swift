@@ -38,7 +38,9 @@ enum ArgumentParser {
                 guard let raw = iterator.next(), let idx = Int(raw) else {
                     return .error("--display requires an integer")
                 }
-                config.displayIndex = idx
+                // Naming a position explicitly overrides a stored identity —
+                // otherwise the flag would appear to do nothing.
+                config.display = .index(idx)
 
             case "--mode":
                 guard let raw = iterator.next() else {
@@ -124,7 +126,8 @@ enum ArgumentParser {
                              mouse       finger drags the pointer
                              touchscreen tap to click, swipe to scroll,
                                          long press to drag
-      --display N          Display index the M14t is mapped to (default: 1)
+      --display N          Display index to map to. Without it, the first
+                           external display is used
       --auto-calibrate     Learn the touch range as you touch all four corners,
                            then save it for future runs
       --invert-x           Mirror the horizontal axis

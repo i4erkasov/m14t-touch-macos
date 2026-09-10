@@ -20,8 +20,11 @@ let banner = """
 func printDisplays() {
     print("📺 Connected displays:")
     for d in DisplayResolver.all() {
-        let tag = d.isMain ? "  ← main" : ""
-        print("   [\(d.index)]  \(Int(d.bounds.width)) × \(Int(d.bounds.height))  @ (\(Int(d.bounds.minX)),\(Int(d.bounds.minY)))\(tag)")
+        var tags: [String] = []
+        if d.isMain { tags.append("main") }
+        tags.append(d.isBuiltin ? "built-in" : "external")
+        if !d.identity.isUsable { tags.append("no identity — can only be selected by index") }
+        print("   [\(d.index)]  \(Int(d.bounds.width)) × \(Int(d.bounds.height))  @ (\(Int(d.bounds.minX)),\(Int(d.bounds.minY)))  — \(tags.joined(separator: ", "))")
     }
 }
 

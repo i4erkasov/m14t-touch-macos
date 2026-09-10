@@ -71,7 +71,10 @@ final class ArgumentParserTests: XCTestCase {
         guard case .run(let config) = ArgumentParser.parse([]) else {
             return XCTFail("expected .run")
         }
-        XCTAssertEqual(config.displayIndex, 1)
+        // No display named, so nothing is pinned: resolution picks the first
+        // external one. The hardcoded index 1 that used to be asserted here is
+        // exactly what spec §32 forbids.
+        XCTAssertEqual(config.display, .automatic)
         XCTAssertFalse(config.autoCalibrate)
         XCTAssertTrue(config.promptForAccessibility)
     }
@@ -80,7 +83,7 @@ final class ArgumentParserTests: XCTestCase {
         guard case .run(let config) = ArgumentParser.parse(["--display", "2"]) else {
             return XCTFail("expected .run")
         }
-        XCTAssertEqual(config.displayIndex, 2)
+        XCTAssertEqual(config.display.index, 2)
     }
 
     func testManualCalibrationFlags() {

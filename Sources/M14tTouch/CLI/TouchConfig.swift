@@ -10,8 +10,12 @@ struct TouchConfig {
     /// Which gesture model interprets the touch stream.
     var mode: TouchMode = .mouse
 
-    /// Index of the display the M14t is mapped to (`0` is the main display).
-    var displayIndex: Int = 1
+    /// Which display the panel is mapped to.
+    ///
+    /// Defaults to automatic — the first external display — rather than a fixed
+    /// index, which spec §32 forbids and which was wrong the moment a monitor
+    /// was unplugged.
+    var display: DisplaySelection = .automatic
 
     /// Mirror the horizontal axis (use if touch is flipped left↔right).
     var invertX: Bool = false

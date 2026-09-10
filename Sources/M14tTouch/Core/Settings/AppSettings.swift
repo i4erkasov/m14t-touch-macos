@@ -23,13 +23,9 @@ struct AppSettings: Equatable, Codable {
     /// Thresholds, delays and cursor policy.
     var gestures = GestureConfiguration()
 
-    /// Index of the display the panel is mapped to.
-    ///
-    /// An index is a poor identity — it shifts when displays are plugged in or
-    /// rearranged — and spec §17 asks for the same display to be found again on
-    /// reconnect. Step 2 of v0.3 replaces this; it is stored now so the value
-    /// has somewhere to live.
-    var displayIndex: Int = 1
+    /// Which display the panel is mapped to, by identity where possible so it
+    /// is found again after replugging (spec §17).
+    var display: DisplaySelection = .automatic
 
     var invertX: Bool = false
     var invertY: Bool = false
@@ -48,7 +44,7 @@ struct AppSettings: Equatable, Codable {
         enabled = value(.enabled, fallback.enabled)
         mode = value(.mode, fallback.mode)
         gestures = value(.gestures, fallback.gestures)
-        displayIndex = value(.displayIndex, fallback.displayIndex)
+        display = value(.display, fallback.display)
         invertX = value(.invertX, fallback.invertX)
         invertY = value(.invertY, fallback.invertY)
     }
@@ -67,7 +63,7 @@ extension AppSettings {
         var config = TouchConfig()
         config.mode = mode
         config.gestures = gestures
-        config.displayIndex = displayIndex
+        config.display = display
         config.invertX = invertX
         config.invertY = invertY
         return config
