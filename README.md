@@ -412,6 +412,12 @@ CGEvent." It's also a compact example of bridging a raw USB HID device to the
 macOS event system in pure Swift — calibration, coordinate mapping, IOKit
 callbacks, and synthetic input, with the tricky math isolated and tested.
 
-## License
+## Credit and licence
 
-[MIT](LICENSE) — do whatever you want with it.
+A fork of [talesmousinho/m14t-touch-macos](https://github.com/talesmousinho/m14t-touch-macos)
+by Tales Fonseca, who wrote the original driver and worked out that the panel
+could be driven at all. Everything here — the gesture recognisers, the pen
+support, the calibration, the menu-bar app — is built on that.
+
+[MIT](LICENSE), and the copyright is his. Do what you like with it, and keep the
+notice.
