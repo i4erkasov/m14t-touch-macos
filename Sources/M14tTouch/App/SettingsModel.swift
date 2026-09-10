@@ -77,7 +77,20 @@ final class SettingsModel: ObservableObject {
     /// a second external monitor is listed alongside, and the user says which.
     var selectableDisplays: [DisplayInfo] {
         let external = displays.filter { !$0.isBuiltin }
-        return external.isEmpty ? displays : external
+        guard !external.isEmpty else { return displays }
+
+        // Then by shape. A display whose proportions differ from the touch
+        // surface cannot be the panel — mapping a 16:9 digitizer onto a 21:9
+        // screen would scale horizontal and vertical movement differently, so it
+        // is not a poorer guess but an impossible one. Two displays of the same
+        // shape are genuinely indistinguishable, and both stay listed.
+        guard let ratio = status.touchAspectRatio else { return external }
+        let matching = external.filter { display in
+            guard display.bounds.height > 0 else { return false }
+            let displayRatio = display.bounds.width / display.bounds.height
+            return abs(displayRatio - ratio) / ratio < 0.03
+        }
+        return matching.isEmpty ? external : matching
     }
 
     /// What macOS calls the target display, for showing to a person.

@@ -117,8 +117,8 @@ private struct GeneralSettings: View {
                 .disabled(model.selectableDisplays.count < 2)
             } footer: {
                 Text(model.selectableDisplays.count < 2
-                     ? "Which screen your touches land on."
-                     : "Which screen your touches land on. The built-in display is not listed — a touch panel is never it.")
+                     ? "Only displays shaped like the touch surface are listed."
+                     : "Which screen your touches land on. Only external displays shaped like the touch surface are listed.")
             }
 
             Section {

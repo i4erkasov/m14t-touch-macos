@@ -381,8 +381,17 @@ final class HIDTouchDriver {
     /// Hand the descriptor range and any saved file to the controller, then put
     /// its verdict into the mapper.
     private func applyCalibration(for device: IOHIDDevice) {
+        let descriptorRange = readDescriptorRange(from: device)
+
+        // The descriptor's proportions, not the saved calibration's: calibration
+        // bounds are wherever a finger happened to reach, and are a percent or
+        // two out. The descriptor states the surface.
+        let width = descriptorRange.xMax - descriptorRange.xMin
+        let height = descriptorRange.yMax - descriptorRange.yMin
+        if width > 0, height > 0 { status.touchAspectRatio = width / height }
+
         let outcome = calibrationController.resolve(
-            descriptorRange: readDescriptorRange(from: device),
+            descriptorRange: descriptorRange,
             saved: CalibrationStore.shared.load(for: calibrationController.displayIdentity)
         )
 
