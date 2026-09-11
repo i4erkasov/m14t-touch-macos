@@ -1,8 +1,12 @@
 # Pinch and multi-touch — what was established
 
 Spec §29 asks to *investigate* whether pinch-to-zoom can be generated on macOS.
-This is that investigation, recorded before the work is scheduled so it is not
-repeated. Nothing here is implemented; it is Phase 2 (spec §11, §29).
+This is that investigation — and, since it was written, the implementation.
+**Both halves are built and working**: contacts are tracked separately and
+spreading two fingers zooms. The corrections below are kept in place rather
+than edited away, because two of the conclusions recorded here confidently
+turned out to be wrong, and that is worth more to the next reader than a tidy
+document.
 
 ## The question splits in two, and the halves have different answers
 
@@ -47,8 +51,16 @@ There is also `Confidence` (0x47), which the panel sets to 0 or 1 — the
 hardware's own opinion of whether a contact is a real fingertip. That is palm
 rejection available for free, and better informed than ours.
 
-The driver currently overwrites one pair of coordinates from every contact, so
-two fingers behave like one jittering finger. The data was always there.
+The driver used to overwrite one pair of coordinates from every contact, so two
+fingers behaved like one jittering finger. It now keys them by the `Finger`
+collection a value was found in — which is forced, not stylistic: IOKit
+delivers only values that *changed*, so `ContactID` is sent once when a finger
+lands and never again while both fingers' coordinates keep arriving
+interleaved. Read flat they are indistinguishable; read per collection they
+were never mixed up.
+
+There are **five** such collections, counted from the descriptor, so the panel
+holds five fingers.
 
 ### Emitting a zoom — no public way to send a real one
 
@@ -58,13 +70,30 @@ initialiser for gesture events. Tools that do it use private APIs.
 
 Public alternatives, with what they cost:
 
-| Approach | Works in | Feel |
-|---|---|---|
-| **⌘ + scroll wheel** | browsers, Preview, most editors | smooth, close to real zoom |
-| ⌘+ / ⌘− | anywhere with a View menu | stepped, not a pinch |
-| private `.magnify` | everywhere | exactly like a phone |
+| Approach | Verdict |
+|---|---|
+| ⌘ + scroll wheel | **does not zoom.** Measured — see below |
+| **⌘= / ⌘−** | works, and is what ships. Stepped, not a pinch |
+| private `.magnify` | would be exact, and is out of bounds |
 
-## Recommendation: ⌘ + scroll, not the private path
+### The correction: ⌘ + scroll does not zoom
+
+This document recommended ⌘ + scroll, on the strength of it being what a mouse
+wheel with Command held sends. It does not work, and that was established on
+the hardware twice over:
+
+- a scroll event carrying `.maskCommand` was read by the browser as a plain
+  scroll, and ran the page to the top;
+- holding Command down as a genuine keyboard event, around the same scrolls,
+  produced the same plain scroll;
+- `⌘=` pressed five times zoomed immediately.
+
+So zoom ships as a keystroke. Two consequences, both real: it goes to the
+**frontmost window** rather than to whatever is under the fingers, and it is
+stepped by nature — each press is a whole zoom level, which is why the gesture
+quantises coarsely and caps a burst.
+
+## Why not the private path
 
 The spec amendment that permitted one private API says plainly: *do not use
 private APIs for HID, gestures or event injection where public ones will do.*
@@ -74,9 +103,10 @@ exists and covers browsers and viewers, where zoom is wanted most, and a private
 one would sit **on the input path**, so a future macOS breaking it would break a
 feature rather than a decoration.
 
-It also fits the architecture already built: a new gesture in the recognizer, a
-new `InputAction` case, and an emitter that adds a modifier to the scroll it
-already knows how to post.
+It also fitted the architecture already built, which is how it turned out: a
+new state in the recognizer, a new `InputAction` case, and a new emitter —
+a keyboard one, as it happens, rather than the scroll emitter this document
+expected.
 
 ## Order of work, when it is scheduled
 
