@@ -227,6 +227,23 @@ final class CursorVisibilityTests: XCTestCase {
         XCTAssertEqual(spy.releases, 1)
     }
 
+    // The blink this guards: the engine releases the hide on the frame the
+    // finger lifts, and a glide that only took over on its first timer tick
+    // left a sixtieth of a second in which the arrow appeared and vanished
+    // again — more distracting than never hiding it at all.
+    func testTheGlideTakesOverInTheSameBreathAsTheRelease() {
+        let (controller, spy) = makeController(policy: .scrolling)
+        controller.update(isTouching: true, isScrolling: true)
+        spy.forgetCounts()
+
+        // The order the engine and emitter produce: release, then the glide.
+        controller.update(isTouching: false, isScrolling: false)
+        controller.updateGlide(isRunning: true)
+
+        XCTAssertEqual(spy.releases, 1)
+        XCTAssertEqual(spy.assertions, 1, "and it is hidden again immediately")
+    }
+
     // Renewed every tick, for the same reason a finger's is renewed every
     // frame: the window server drops the request rather than remembering it.
     func testEveryTickOfTheGlideRenewsTheHide() {

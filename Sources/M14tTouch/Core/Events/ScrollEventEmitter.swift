@@ -74,6 +74,13 @@ final class ScrollEventEmitter: EventEmitter {
     private func startGlide(from velocity: CGVector, restoringCursor: Bool) {
         stopGlide()
 
+        // Before the timer, not on its first tick. The engine releases the hide
+        // when the finger lifts, and the first tick is a sixtieth of a second
+        // later — long enough for the arrow to appear and vanish again, which
+        // is worse than never hiding it. Taken over in the same instant
+        // instead, on the same queue, between the release and anything drawing.
+        onGlideRunning?(true)
+
         var momentum = ScrollMomentum(velocity: velocity)
         var phase = CGMomentumScrollPhase.begin
         var carried = ScrollAccumulator()
