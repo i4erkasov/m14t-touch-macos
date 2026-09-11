@@ -18,10 +18,15 @@ struct RoutingEventEmitter: EventEmitter {
     /// Asking the system for something, rather than sending it input.
     var workspace: EventEmitter = WorkspaceEventEmitter()
 
+    /// Putting a window in front, so that a keystroke reaches it.
+    var focus: EventEmitter = WindowFocusEmitter()
+
     func emit(_ action: InputAction) {
         switch action {
         case .showAllWindows:
             workspace.emit(action)
+        case .focusWindow:
+            focus.emit(action)
         case .zoom:
             keyboard.emit(action)
         case .scroll, .scrollEnd:

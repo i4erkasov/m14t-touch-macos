@@ -30,6 +30,14 @@ enum InputAction: Equatable, Sendable {
     /// Not produced in v0.1 (spec §7.2, §23).
     case scroll(deltaX: CGFloat, deltaY: CGFloat)
 
+    /// Bring whatever is at this point to the front, without clicking it.
+    ///
+    /// Zoom is delivered as ⌘= , which goes to the frontmost window — so
+    /// pinching on the panel zoomed whatever happened to be active elsewhere.
+    /// Clicking to fix that would press whatever is under the fingers; asking
+    /// the accessibility interface to raise the window does not.
+    case focusWindow(position: CGPoint)
+
     /// Show every open window — what a trackpad does for three fingers up.
     ///
     /// Named for what the user wanted rather than for how it is delivered,

@@ -68,7 +68,11 @@ struct TouchscreenRecognizer: GestureRecognizer {
             return []
         }
 
-        if configuration.pinchToZoom, touching.count >= 2 {
+        // Not from `.abandoned`: that state means this touch is finished and
+        // nothing more will come of it until every finger is off. Without the
+        // guard, lifting from three fingers to two started a zoom on the very
+        // next frame — the survivors inheriting a gesture the user had ended.
+        if configuration.pinchToZoom, touching.count >= 2, !isAbandoned {
             return pinch(touching)
         }
         if case .zooming = state {
@@ -184,6 +188,12 @@ struct TouchscreenRecognizer: GestureRecognizer {
         }
     }
 
+    /// Whether this touch has been written off until every finger lifts.
+    private var isAbandoned: Bool {
+        if case .abandoned = state { return true }
+        return false
+    }
+
     /// Three fingers travelling together.
     ///
     /// Only upwards, and only once per gesture. Upwards is decreasing `y`:
@@ -223,11 +233,15 @@ struct TouchscreenRecognizer: GestureRecognizer {
 
         guard case .zooming(let previous, let carried) = state else {
             state = .zooming(distance: distance, carried: 0)
-            // Nothing is emitted to open the gesture. Zoom is sent as ⌘= and
-            // ⌘-, which go to the frontmost window rather than to whatever is
-            // under the pointer, so moving the pointer would achieve nothing
-            // and cost a cursor warp.
-            return []
+            // Zoom is sent as ⌘= , which goes to the frontmost window — so
+            // without this, pinching on the panel zoomed whatever was active on
+            // another screen. Asked for once, at the start: the first step
+            // cannot arrive until the fingers have moved a whole step, which is
+            // all the time the raise needs.
+            return [.focusWindow(position: CGPoint(
+                x: (first.x + second.x) / 2,
+                y: (first.y + second.y) / 2
+            ))]
         }
 
         let moved = Double(distance - previous) + carried

@@ -50,13 +50,15 @@ final class PinchTests: XCTestCase {
         ))
     }
 
-    // Zoom is sent as ⌘= and ⌘-, which go to the frontmost window rather than
-    // under the pointer, so opening the gesture moves nothing and emits
-    // nothing. Measured, not assumed: ⌘ with a scroll — the obvious route —
-    // was read as a plain scroll by the browser it was tested against.
-    func testOpeningTheGestureEmitsNothing() {
+    // Zoom is sent as ⌘= , which goes to the frontmost window. Without this the
+    // gesture happened on the panel and the zoom happened on another screen —
+    // reported from use, not imagined.
+    func testOpeningTheGestureBringsTheWindowUnderTheFingersForward() {
         var recognizer = self.recognizer()
-        XCTAssertEqual(recognizer.process(pinch(100)), [])
+        XCTAssertEqual(
+            recognizer.process(pinch(100)),
+            [.focusWindow(position: CGPoint(x: 500, y: 500))]
+        )
     }
 
     func testSpreadingByOneStepZoomsIn() {
@@ -167,7 +169,8 @@ final class PinchTests: XCTestCase {
         XCTAssertEqual(recognizer.reset(), [])
 
         // A fresh gesture is recognised afterwards, so the state really cleared.
-        XCTAssertEqual(recognizer.process(pinch(100, at: 1.0)), [])
+        XCTAssertEqual(recognizer.process(pinch(100, at: 1.0)),
+                       [.focusWindow(position: CGPoint(x: 500, y: 500))])
         XCTAssertEqual(recognizer.process(pinch(140, at: 1.1)), [.zoom(steps: 1)])
     }
 }
