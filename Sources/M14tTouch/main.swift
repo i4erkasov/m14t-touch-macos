@@ -73,6 +73,13 @@ func makeEngine(for config: TouchConfig)
     let mouse = MouseEventEmitter()
     let scroll = ScrollEventEmitter()
     scroll.onGlideEnded = { [weak mouse] in mouse?.emit(.cursorRestore) }
+    // And the arrow stays hidden for as long as the content is still moving.
+    // Uncovering it the instant a finger lifts put it on screen at the one
+    // moment it is most obviously in the way: nothing is touching the panel to
+    // explain why the page is still going.
+    scroll.onGlideRunning = { [cursorVisibility] running in
+        cursorVisibility.updateGlide(isRunning: running)
+    }
 
     let engine = TouchEngine(
         recognizer: config.mode.makeRecognizer(config: config),

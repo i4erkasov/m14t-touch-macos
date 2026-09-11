@@ -28,6 +28,7 @@ final class CursorVisibilityController {
     /// be one caller of it, and this is it.
     private var fingerWantsHiding = false
     private var penWantsHiding = false
+    private var glideWantsHiding = false
 
     init(policy: CursorHiding, visibility: CursorVisibility) {
         self.policy = policy
@@ -70,7 +71,24 @@ final class CursorVisibilityController {
         }
     }
 
-    /// Follow the pen's own pointer.
+    /// Follow the glide that carries on after a finger lifts.
+    ///
+    /// Without this the arrow reappeared the instant the finger left and then
+    /// sat there while the content was still moving — the one moment it is most
+    /// obviously in the way, since nothing is touching the screen to explain it.
+    ///
+    /// Subject to the hiding policy, unlike the pen's: a glide is the tail of a
+    /// scroll, so whoever asked not to have the pointer hidden while scrolling
+    /// did not ask for this either.
+    func updateGlide(isRunning: Bool) {
+        settle {
+            self.glideWantsHiding = isRunning
+                && self.policy.hidesAnything
+                && self.visibility.isAvailable
+        }
+    }
+
+    /// Follow the pen's own pointer.    /// Follow the pen's own pointer.
     ///
     /// Independent of the hiding policy, which is about fingers: a drawn pointer
     /// is not a policy about when to hide the arrow, it is a replacement for it,
@@ -90,7 +108,7 @@ final class CursorVisibilityController {
     private func settle(_ change: () -> Void) {
         lock.lock()
         change()
-        let wanted = fingerWantsHiding || penWantsHiding
+        let wanted = fingerWantsHiding || penWantsHiding || glideWantsHiding
         let shouldRelease = !wanted && isHiding
         isHiding = wanted
         lock.unlock()
@@ -112,6 +130,7 @@ final class CursorVisibilityController {
         isHiding = false
         fingerWantsHiding = false
         penWantsHiding = false
+        glideWantsHiding = false
         lock.unlock()
         visibility.release()
     }

@@ -34,6 +34,13 @@ final class ScrollEventEmitter: EventEmitter {
     /// back is the mouse emitter's business and not this one's.
     var onGlideEnded: (() -> Void)?
 
+    /// Called with `true` on every tick of a glide and `false` once it is over.
+    ///
+    /// Per tick rather than once, because the window server drops a request to
+    /// hide the pointer rather than remembering it: asking once would hide the
+    /// arrow for a moment and no longer.
+    var onGlideRunning: ((Bool) -> Void)?
+
     func emit(_ action: InputAction) {
         if case .scrollMomentum(let velocity, let restoresCursor) = action {
             startGlide(from: velocity, restoringCursor: restoresCursor)
@@ -78,12 +85,16 @@ final class ScrollEventEmitter: EventEmitter {
                 // One last event to say it has stopped, or applications go on
                 // believing a glide is in progress.
                 post(vertical: 0, horizontal: 0, phase: nil, momentum: .end)
-                stopGlide()
-                // Only now: the pointer had to stay where the gesture was for
-                // as long as the glide was still scrolling there.
+                // The pointer goes home first and the arrow is uncovered after,
+                // so it is revealed where it has arrived rather than for a frame
+                // on the panel it just left.
                 if restoringCursor { onGlideEnded?() }
+                stopGlide()
                 return
             }
+            // Renewed every tick: a hidden pointer stays hidden only while
+            // something keeps asking.
+            onGlideRunning?(true)
             guard let wheel = carried.take(x: Double(step.dx), y: Double(step.dy)) else { return }
             post(vertical: wheel.vertical, horizontal: wheel.horizontal,
                  phase: .none, momentum: phase)
@@ -94,8 +105,12 @@ final class ScrollEventEmitter: EventEmitter {
     }
 
     private func stopGlide() {
+        guard glide != nil else { return }
         glide?.cancel()
         glide = nil
+        // However it ended — finished, or cut short by a finger landing — the
+        // arrow is no longer being held back by a glide.
+        onGlideRunning?(false)
     }
 
     /// One scroll event, carrying the phase that makes macOS treat it as a

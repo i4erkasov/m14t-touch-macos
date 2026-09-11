@@ -201,6 +201,76 @@ final class CursorVisibilityTests: XCTestCase {
         XCTAssertEqual(spy.releases, 0)
     }
 
+    // MARK: - The glide after a flick
+
+    // The bug this guards, reported from use: the arrow reappeared the instant
+    // the finger lifted and then sat there while the page was still moving —
+    // the one moment it is most obviously in the way, since nothing is touching
+    // the screen to explain why anything is happening.
+    func testTheArrowStaysHiddenWhileTheContentIsStillMoving() {
+        let (controller, spy) = makeController(policy: .scrolling)
+        controller.update(isTouching: true, isScrolling: true)
+        controller.updateGlide(isRunning: true)
+        spy.forgetCounts()
+
+        controller.update(isTouching: false, isScrolling: false)
+        XCTAssertEqual(spy.releases, 0, "the glide is still going")
+    }
+
+    func testTheArrowComesBackWhenTheGlideStops() {
+        let (controller, spy) = makeController(policy: .scrolling)
+        controller.update(isTouching: true, isScrolling: true)
+        controller.updateGlide(isRunning: true)
+        controller.update(isTouching: false, isScrolling: false)
+
+        controller.updateGlide(isRunning: false)
+        XCTAssertEqual(spy.releases, 1)
+    }
+
+    // Renewed every tick, for the same reason a finger's is renewed every
+    // frame: the window server drops the request rather than remembering it.
+    func testEveryTickOfTheGlideRenewsTheHide() {
+        let (controller, spy) = makeController(policy: .scrolling)
+        for _ in 0..<5 { controller.updateGlide(isRunning: true) }
+        XCTAssertEqual(spy.assertions, 5)
+    }
+
+    // A glide is the tail of a scroll, so whoever asked not to have the pointer
+    // hidden while scrolling did not ask for this either.
+    func testAGlideObeysTheHidingPolicy() {
+        let (controller, spy) = makeController(policy: .never)
+        controller.updateGlide(isRunning: true)
+        XCTAssertEqual(spy.assertions, 0)
+    }
+
+    func testAGlideCannotHideWhatTheImplementationCannotHide() {
+        let (controller, spy) = makeController(policy: .scrolling, available: false)
+        controller.updateGlide(isRunning: true)
+        XCTAssertEqual(spy.assertions, 0)
+    }
+
+    // A finger landing to stop the page must not uncover the arrow while its
+    // own gesture is under way.
+    func testAGlideEndingDoesNotUncoverAFingerThatHasLanded() {
+        let (controller, spy) = makeController(policy: .touching)
+        controller.updateGlide(isRunning: true)
+        controller.update(isTouching: true, isScrolling: false)
+        spy.forgetCounts()
+
+        controller.updateGlide(isRunning: false)
+        XCTAssertEqual(spy.releases, 0)
+    }
+
+    func testRestoreForgetsTheGlideToo() {
+        let (controller, spy) = makeController(policy: .scrolling)
+        controller.updateGlide(isRunning: true)
+        controller.restore()
+        spy.forgetCounts()
+
+        controller.update(isTouching: false, isScrolling: false)
+        XCTAssertEqual(spy.releases, 0)
+    }
+
     // MARK: - Policy
 
     // The mode that actually works: during a scroll the pointer is placed once
