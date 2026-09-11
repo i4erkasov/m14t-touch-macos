@@ -130,6 +130,10 @@ final class HIDTouchDriver {
     /// Signalled when the HID manager's cancellation has actually completed.
     private var cancellation: DispatchSemaphore?
 
+    /// Whether the panel was let go for a sleep, and is waiting to be taken
+    /// back. Keeps suspend and resume paired.
+    private var isSuspended = false
+
     private var isWatchingDisplays = false
 
     private var hasLoggedFirstValue = false
@@ -341,6 +345,10 @@ final class HIDTouchDriver {
     ///   is listening, not that anything answered.
     func restart(completion: ((Bool) -> Void)? = nil) {
         log("🔄 Releasing the panel and taking it again")
+        // Clears any suspension too: a manual reconnect is the recovery for a
+        // wake that never came, and it must not be refused by the flag that
+        // failure would have left behind.
+        isSuspended = false
         stop()
         // Cleared so the answer means something. Cancelling does not fire the
         // removal callback, so without this the old status would survive and
@@ -352,6 +360,34 @@ final class HIDTouchDriver {
             let connected = self?.status.isConnected ?? false
             DispatchQueue.main.async { completion?(connected) }
         }
+    }
+
+    /// Let the panel go, because the machine is about to sleep.
+    ///
+    /// Deliberately the same release as shutting down, including waiting for it
+    /// to complete: holding an exclusive claim across a sleep is how the claim
+    /// goes stale, and the pen then reports nothing while the finger carries on.
+    func suspend() {
+        guard !isSuspended else { return }
+        isSuspended = true
+        log("😴 Sleeping — releasing the panel")
+        stop()
+    }
+
+    /// Take it again, having woken.
+    ///
+    /// No delay before trying. If the panel has not finished re-enumerating,
+    /// the manager simply has nothing to match yet and IOKit calls back when it
+    /// appears — which is the same path a replugged cable takes, and that one is
+    /// known to work.
+    func resume() {
+        // Paired with suspend rather than unconditional, so a wake that arrives
+        // without a sleep — or twice — cannot start a second manager on top of
+        // the first.
+        guard isSuspended else { return }
+        isSuspended = false
+        log("☀️  Awake — taking the panel again")
+        start()
     }
 
     /// Start or stop narrating recognised actions to the system log, from any

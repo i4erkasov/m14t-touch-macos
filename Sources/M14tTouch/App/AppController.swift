@@ -23,6 +23,9 @@ final class AppController: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var settingsWindow: NSWindow?
     private var settingsModel: SettingsModel?
+
+    /// Held for the app's lifetime: it stops listening when it is released.
+    private var powerWatcher: PowerWatcher?
     private lazy var calibrationOverlay = CalibrationOverlayController(driver: driver)
 
     /// The dot the pen draws instead of the arrow, when asked for.
@@ -90,6 +93,17 @@ final class AppController: NSObject, NSApplicationDelegate {
 
         penPointer.apply(settings.pen)
         driver.setPenPointer(penPointer)
+
+        powerWatcher = PowerWatcher(
+            willSleep: { [weak self] in
+                guard let self else { return }
+                // The pointer first, for the same reason as at shutdown: waking
+                // to a machine with no cursor is worse than any alternative.
+                self.cursorVisibility.restore()
+                self.driver.suspend()
+            },
+            didWake: { [weak self] in self?.driver.resume() }
+        )
 
         driver.setEnabled(settings.enabled)
         driver.start()

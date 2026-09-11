@@ -179,6 +179,18 @@ case .run(let config):
     }
     _ = shutdownHandler
 
+    // Same reasoning as in the app: an exclusive claim held across a sleep is
+    // how the claim goes stale, and the pen then reports nothing while the
+    // finger carries on. Held for the lifetime of the process.
+    let powerWatcher = PowerWatcher(
+        willSleep: {
+            cursorVisibility.restore()
+            driver.suspend()
+        },
+        didWake: { driver.resume() }
+    )
+    _ = powerWatcher
+
     driver.start()
 
     // All work happens in IOKit callbacks scheduled on this run loop.
