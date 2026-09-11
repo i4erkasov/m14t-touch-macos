@@ -1,0 +1,159 @@
+:root {
+  color-scheme: light dark;
+  --bg: #fbfbfd;
+  --panel: #ffffff;
+  --ink: #1d1d1f;
+  --muted: #6e6e73;
+  --line: #e3e3e6;
+  --accent: #30d158;
+  --accent-ink: #0b6b2c;
+  --code-bg: #f2f2f4;
+  --radius: 14px;
+  --max: 780px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1012;
+    --panel: #17181b;
+    --ink: #f2f2f4;
+    --muted: #9a9aa2;
+    --line: #2a2c31;
+    --accent-ink: #6ee392;
+    --code-bg: #1e2024;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.65 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+main { max-width: var(--max); margin: 0 auto; padding: 0 22px 96px; }
+a { color: inherit; }
+h1, h2, h3 { line-height: 1.2; letter-spacing: -0.02em; }
+h2 { font-size: 1.45rem; margin: 3rem 0 0.8rem; }
+h3 { font-size: 1.05rem; margin: 1.6rem 0 0.4rem; }
+p { margin: 0.7rem 0; }
+code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 0.88em;
+  background: var(--code-bg);
+  padding: 0.15em 0.4em;
+  border-radius: 5px;
+}
+pre {
+  background: var(--code-bg);
+  padding: 14px 16px;
+  border-radius: 10px;
+  overflow-x: auto;
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+pre code { background: none; padding: 0; }
+
+/* Hero */
+header {
+  text-align: center;
+  padding: 88px 22px 8px;
+  max-width: var(--max);
+  margin: 0 auto;
+}
+.mark {
+  width: 62px; height: 62px;
+  margin: 0 auto 22px;
+  border-radius: 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  display: grid; place-items: center;
+}
+.mark svg { width: 30px; height: 30px; }
+header h1 { font-size: clamp(2rem, 5vw, 2.7rem); margin: 0 0 0.5rem; }
+.tagline { color: var(--muted); font-size: 1.1rem; max-width: 34rem; margin: 0 auto; }
+.badges { margin: 20px 0 0; color: var(--muted); font-size: 0.85rem; }
+.badges span { white-space: nowrap; }
+.badges span + span::before { content: "·"; margin: 0 0.55em; opacity: 0.6; }
+
+.cta { margin: 32px 0 0; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.button {
+  display: inline-block;
+  padding: 11px 22px;
+  border-radius: 10px;
+  text-decoration: none;
+  font-weight: 590;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+.button.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+/* Content blocks */
+.lede {
+  margin: 56px 0 0;
+  font-size: 1.05rem;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 18px;
+  margin: 22px 0 0;
+}
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+}
+.card h3 { margin: 0 0 0.3rem; }
+.card p { margin: 0; color: var(--muted); font-size: 0.94rem; }
+
+ol.steps { padding-left: 1.2rem; }
+ol.steps li { margin: 0.6rem 0; }
+
+.note {
+  border-left: 3px solid var(--accent);
+  padding: 2px 0 2px 16px;
+  margin: 20px 0;
+  color: var(--muted);
+}
+
+table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.94rem; }
+th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 590; }
+
+footer {
+  border-top: 1px solid var(--line);
+  margin-top: 72px;
+  padding: 26px 22px 60px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+footer a { text-decoration-color: var(--line); }
+
+/* Guide pages */
+.shot {
+  margin: 22px 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--panel);
+}
+.shot img { display: block; width: 100%; height: auto; }
+.caption { color: var(--muted); font-size: 0.86rem; margin: 0 0 30px; }
+dl { margin: 14px 0; }
+dt { font-weight: 590; margin: 14px 0 2px; }
+dd { margin: 0 0 0 0; color: var(--muted); }
+nav.local {
+  margin: 26px 0 0;
+  padding: 14px 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-size: 0.94rem;
+}
+nav.local a { color: var(--muted); text-decoration: none; }
+nav.local a:hover { color: var(--ink); }
+nav.local span + span::before { content: "·"; margin: 0 0.5em; opacity: 0.6; }
+.back { display: inline-block; margin: 26px 0 0; color: var(--muted); font-size: 0.9rem; }
+

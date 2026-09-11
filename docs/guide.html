@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M14t Touch — settings guide</title>
+<meta name="description" content="Every setting in M14t Touch, what it does, and what it cannot do.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <h1>Settings</h1>
+  <p class="tagline">
+    Every control, what it does, and — where it matters — what it cannot do.
+  </p>
+</header>
+
+<main>
+
+<nav class="local">
+  <span><a href="#general">General</a></span><span><a href="#touch">Touch</a></span><span><a href="#pen">Pen</a></span><span><a href="#calibration">Calibration</a></span><span><a href="#diagnostics">Diagnostics</a></span>
+</nav>
+
+<p class="lede">
+  The app lives in the menu bar. Its icon is dim when nothing is being
+  translated — a disconnected panel, touch switched off, or a permission that
+  was not granted — and the menu says which.
+</p>
+
+<h2 id="general">General</h2>
+
+<div class="shot"><img src="images/settings-general.png" alt="The General pane"></div>
+<p class="caption">Which display the panel is, permissions, and starting at login.</p>
+
+<dl>
+  <dt>Display</dt>
+  <dd>Which screen the touches are mapped onto. Left to itself the app picks the
+      one whose proportions match the panel, which is what you want unless you
+      have two touch displays. The line above it says whether the panel is
+      connected, and names what is missing when it is not.</dd>
+
+  <dt>Permissions</dt>
+  <dd><strong>Input Monitoring</strong> lets the app read the panel;
+      <strong>Accessibility</strong> lets it move the pointer and click. Both are
+      required, both are granted by hand in System Settings, and macOS only
+      applies them to a newly started process — so quit and reopen the app
+      afterwards. The button beside each opens the right pane.</dd>
+
+  <dt>Open at login</dt>
+  <dd>Registers the app with macOS so it starts when you log in. It appears only
+      in the installed app, and macOS may ask you to approve it under Login
+      Items.</dd>
+</dl>
+
+<h2 id="touch">Touch</h2>
+
+<div class="shot"><img src="images/settings-touch.png" alt="The Touch pane"></div>
+<p class="caption">Finger gestures. Most of what you will use day to day.</p>
+
+<dl>
+  <dt>Behaviour</dt>
+  <dd><strong>Touchscreen</strong> is the one to use: tap to click, swipe to
+      scroll, press and hold to drag. <strong>Mouse</strong> is the original
+      behaviour this project started from, where a finger drags the pointer
+      about like a trackpad. It is kept because it was the original, not because
+      it is better.</dd>
+
+  <dt>Tap to click, One-finger scroll, Long press to drag</dt>
+  <dd>Each gesture separately. Turning one off does not disturb the others: a
+      touch that cannot become a scroll simply stays a tap.</dd>
+
+  <dt>Natural scrolling</dt>
+  <dd>The content follows your finger, as on a phone. Off, it goes the other
+      way.</dd>
+
+  <dt>Sensitivity, Starts after</dt>
+  <dd>How far the content moves per finger, and how far a finger must travel
+      before a touch is treated as a scroll rather than a tap.</dd>
+
+  <dt>Keep going after you lift</dt>
+  <dd>A flick carries on and slows to a stop. macOS produces this itself for a
+      trackpad and cannot for this panel, so the app generates it. A finger that
+      stops before lifting stops the content too — it was placing it, not
+      throwing it.</dd>
+
+  <dt>Spread two fingers to zoom</dt>
+  <dd>The window under your fingers comes forward, then each step of spreading
+      sends ⌘=. Stepped rather than smooth, because a true pinch cannot be sent
+      by any application without private APIs, and the substitute is a whole
+      zoom level at a time. The step size is how far your fingers travel per
+      level.</dd>
+
+  <dt>Swipe up with three fingers</dt>
+  <dd>Opens Mission Control, so you can tap the window you want. Only this one
+      gesture: the others a trackpad offers — an application's windows,
+      switching desktops — run macOS's own shortcuts, and those do not answer a
+      keystroke sent by an app. They are left out rather than offered and
+      silently doing nothing.</dd>
+
+  <dt>Hold for (Drag)</dt>
+  <dd>How long a finger must rest before a touch becomes a drag.</dd>
+
+  <dt>Hide pointer</dt>
+  <dd>The arrow is in the way on a screen you touch directly.
+      <strong>While scrolling</strong> is the setting that works best, because
+      the pointer is placed once and then stays still, and a pointer that moves
+      becomes visible again whatever anyone asks.
+      <strong>Restore afterwards</strong> puts it back where you left it when
+      the gesture ends.</dd>
+</dl>
+
+<h2 id="pen">Pen</h2>
+
+<div class="shot"><img src="images/settings-pen.png" alt="The Pen pane"></div>
+<p class="caption">The stylus: its two buttons, its pointer, and pressure.</p>
+
+<dl>
+  <dt>Handle the stylus</dt>
+  <dd>Takes the panel from macOS exclusively, which is the only way to stop the
+      system moving the pointer relative to wherever it already was. The cost is
+      real and worth knowing: <strong>the pen does nothing at all while this app
+      is not running.</strong></dd>
+
+  <dt>Move the pointer while hovering</dt>
+  <dd>Seeing where the pen is about to land is most of what hovering is for.
+      Off, nothing moves until the tip touches.</dd>
+
+  <dt>Near button — Hover action, Touch action</dt>
+  <dd>The button closest to the tip does two different things. Pressed in the
+      air it performs the hover action, on release, so that reaching to erase
+      does not click on the way. Held while the tip touches, the panel reports
+      an eraser stroke, and the touch action decides what that becomes. Eraser
+      strokes reach only applications that understand a tablet eraser — which,
+      on this hardware, means none of them: the event that would say which end
+      of the pen is touching never reaches applications.</dd>
+
+  <dt>Far button</dt>
+  <dd>The button further from the tip. Both buttons work while merely hovering,
+      so a context menu without touching the screen is possible.</dd>
+
+  <dt>Pointer</dt>
+  <dd><strong>Dot</strong> draws a small coloured ring where the pen is and
+      hides the system arrow, which suits direct touch. The dot's middle stays
+      dark so it can be seen on a pale window; the ring carries the colour you
+      choose. <strong>System arrow</strong> leaves the pointer alone.</dd>
+
+  <dt>Return the pointer when the pen leaves</dt>
+  <dd>Reaching the panel takes the pointer there, because a click carries its
+      position. This puts it back where it was — after a pause, so that lifting
+      the pen between strokes does not throw it across the desk and back.</dd>
+
+  <dt>Send pressure to applications</dt>
+  <dd>Marks strokes as coming from a tablet, which is what carries pressure; an
+      ordinary click can only be full or none. <strong>Off by default</strong>,
+      and that is a finding rather than caution: turning it on broke a
+      browser-based drawing application, which stopped responding to the pen
+      entirely. Turn it off again if the pen misbehaves.</dd>
+
+  <dt>Palm rejection</dt>
+  <dd>Touches that <em>begin</em> while the pen is near are ignored for their
+      whole life, so a hand resting on the panel to write does not interfere. A
+      touch already under way when the pen arrives keeps its gesture rather than
+      being cut in half.</dd>
+</dl>
+
+<h2 id="calibration">Calibration</h2>
+
+<div class="shot"><img src="images/settings-calibration.png" alt="The Calibration pane"></div>
+<p class="caption">Only needed if touches land somewhere other than where you touched.</p>
+
+<dl>
+  <dt>Calibrate</dt>
+  <dd>Shows a full-screen target in each corner of the panel in turn; touch each
+      one. The result is saved against that particular display, so unplugging
+      and reconnecting it does not lose the calibration. It also works out
+      whether the panel counts its axes backwards, so there is no checkbox to
+      find for that.</dd>
+
+  <dt>Flip horizontally / vertically</dt>
+  <dd>For the case where calibration has not been run and the axes are the wrong
+      way round.</dd>
+
+  <dt>Reset</dt>
+  <dd>Forgets the saved calibration and goes back to the range the panel
+      declares about itself. Worth trying if touches were fine and then became
+      strange.</dd>
+</dl>
+
+<h2 id="diagnostics">Diagnostics</h2>
+
+<div class="shot"><img src="images/settings-diagnostics.png" alt="The Diagnostics pane"></div>
+<p class="caption">What the panel is actually doing, and what to try when it is not.</p>
+
+<dl>
+  <dt>Reconnect the panel</dt>
+  <dd>Releases the panel and takes it again — the same thing unplugging the
+      cable does. Try this first if the pen goes silent while touch still works,
+      then take the battery out of the stylus and put it back. Both have been
+      seen to bring it back.</dd>
+
+  <dt>Device, Displays</dt>
+  <dd>What is connected, its identifiers, and every display with its position
+      and rotation. The numbers to quote when reporting a problem.</dd>
+
+  <dt>Live input</dt>
+  <dd>What the panel is reporting as you touch it: how many values a second are
+      arriving, from the pen or a finger, how many contacts, the panel's own
+      coordinates <em>before</em> calibration, where they land on screen, and
+      pressure raw and scaled. Panel coordinates are the useful ones when a
+      touch lands in the wrong place.</dd>
+
+  <dt>Log pen actions to the system log</dt>
+  <dd>Records every action the pen produces, so a problem can be read back
+      afterwards with <code>log show --last 5m --predicate 'subsystem ==
+      "com.m14ttouch.app"' --info</code>. Switch it off when done; it is
+      verbose, and it is not remembered between launches.</dd>
+
+  <dt>Copy report</dt>
+  <dd>Puts the above on the clipboard, for pasting into a bug report.</dd>
+</dl>
+
+<a class="back" href="./">← Back</a>
+
+</main>
+
+<footer>
+  <p>
+    MIT licensed ·
+    <a href="https://github.com/i4erkasov/m14t-touch-macos">GitHub</a> ·
+    <a href="https://github.com/i4erkasov/m14t-touch-macos/issues">Report a problem</a>
+  </p>
+</footer>
+
+</body>
+</html>

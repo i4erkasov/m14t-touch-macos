@@ -5,140 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>M14t Touch — touchscreen and stylus for the ThinkVision M14t on macOS</title>
 <meta name="description" content="A small, dependency-free macOS driver that brings touch and stylus input to the Lenovo ThinkVision M14t.">
-<style>
-:root {
-  color-scheme: light dark;
-  --bg: #fbfbfd;
-  --panel: #ffffff;
-  --ink: #1d1d1f;
-  --muted: #6e6e73;
-  --line: #e3e3e6;
-  --accent: #30d158;
-  --accent-ink: #0b6b2c;
-  --code-bg: #f2f2f4;
-  --radius: 14px;
-  --max: 780px;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f1012;
-    --panel: #17181b;
-    --ink: #f2f2f4;
-    --muted: #9a9aa2;
-    --line: #2a2c31;
-    --accent-ink: #6ee392;
-    --code-bg: #1e2024;
-  }
-}
-* { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--ink);
-  font: 16px/1.65 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-}
-main { max-width: var(--max); margin: 0 auto; padding: 0 22px 96px; }
-a { color: inherit; }
-h1, h2, h3 { line-height: 1.2; letter-spacing: -0.02em; }
-h2 { font-size: 1.45rem; margin: 3rem 0 0.8rem; }
-h3 { font-size: 1.05rem; margin: 1.6rem 0 0.4rem; }
-p { margin: 0.7rem 0; }
-code {
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-  font-size: 0.88em;
-  background: var(--code-bg);
-  padding: 0.15em 0.4em;
-  border-radius: 5px;
-}
-pre {
-  background: var(--code-bg);
-  padding: 14px 16px;
-  border-radius: 10px;
-  overflow-x: auto;
-  font-size: 0.85rem;
-  line-height: 1.55;
-}
-pre code { background: none; padding: 0; }
-
-/* Hero */
-header {
-  text-align: center;
-  padding: 88px 22px 8px;
-  max-width: var(--max);
-  margin: 0 auto;
-}
-.mark {
-  width: 62px; height: 62px;
-  margin: 0 auto 22px;
-  border-radius: 16px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  display: grid; place-items: center;
-}
-.mark svg { width: 30px; height: 30px; }
-header h1 { font-size: clamp(2rem, 5vw, 2.7rem); margin: 0 0 0.5rem; }
-.tagline { color: var(--muted); font-size: 1.1rem; max-width: 34rem; margin: 0 auto; }
-.badges { margin: 20px 0 0; color: var(--muted); font-size: 0.85rem; }
-.badges span { white-space: nowrap; }
-.badges span + span::before { content: "·"; margin: 0 0.55em; opacity: 0.6; }
-
-.cta { margin: 32px 0 0; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
-.button {
-  display: inline-block;
-  padding: 11px 22px;
-  border-radius: 10px;
-  text-decoration: none;
-  font-weight: 590;
-  border: 1px solid var(--line);
-  background: var(--panel);
-}
-.button.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-
-/* Content blocks */
-.lede {
-  margin: 56px 0 0;
-  font-size: 1.05rem;
-}
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-  gap: 18px;
-  margin: 22px 0 0;
-}
-.card {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 18px 20px;
-}
-.card h3 { margin: 0 0 0.3rem; }
-.card p { margin: 0; color: var(--muted); font-size: 0.94rem; }
-
-ol.steps { padding-left: 1.2rem; }
-ol.steps li { margin: 0.6rem 0; }
-
-.note {
-  border-left: 3px solid var(--accent);
-  padding: 2px 0 2px 16px;
-  margin: 20px 0;
-  color: var(--muted);
-}
-
-table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.94rem; }
-th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
-th { color: var(--muted); font-weight: 590; }
-
-footer {
-  border-top: 1px solid var(--line);
-  margin-top: 72px;
-  padding: 26px 22px 60px;
-  text-align: center;
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-footer a { text-decoration-color: var(--line); }
-</style>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 
@@ -161,6 +28,7 @@ footer a { text-decoration-color: var(--line); }
   </p>
   <div class="cta">
     <a class="button primary" href="https://github.com/i4erkasov/m14t-touch-macos/releases">Download</a>
+    <a class="button" href="guide.html">Settings guide</a>
     <a class="button" href="https://github.com/i4erkasov/m14t-touch-macos">Source on GitHub</a>
   </div>
 </header>
@@ -179,13 +47,25 @@ footer a { text-decoration-color: var(--line); }
 <div class="grid">
   <div class="card">
     <h3>Touch</h3>
-    <p>Tap, one-finger scroll and long-press drag. Scrolling is sent as a
-       trackpad gesture, so it is smooth and rubber-bands at the end of a page.</p>
+    <p>Tap, scroll and long-press to drag. A flick keeps going and slows to a
+       stop, and scrolling rubber-bands at the end of a page the way a trackpad
+       does.</p>
+  </div>
+  <div class="card">
+    <h3>Two fingers to zoom</h3>
+    <p>Spread or close two fingers. The window under them comes forward first,
+       so what you are touching is what zooms.</p>
+  </div>
+  <div class="card">
+    <h3>Three fingers for every window</h3>
+    <p>Swipe up with three fingers to open Mission Control, then tap the window
+       you want.</p>
   </div>
   <div class="card">
     <h3>Stylus</h3>
     <p>Hovering moves the pointer, the tip draws, and both barrel buttons are
-       configurable — including while the pen is only hovering.</p>
+       configurable — including while the pen is only hovering. Pressure can be
+       sent to applications that understand it.</p>
   </div>
   <div class="card">
     <h3>A dot instead of an arrow</h3>
@@ -204,8 +84,8 @@ footer a { text-decoration-color: var(--line); }
   </div>
   <div class="card">
     <h3>Diagnostics</h3>
-    <p>A live view of what the panel is reporting, and a log you can read back
-       when something goes wrong.</p>
+    <p>A live view of what the panel is reporting, a log you can read back, and
+       a button that releases and retakes the panel when something goes odd.</p>
   </div>
 </div>
 
@@ -251,6 +131,19 @@ footer a { text-decoration-color: var(--line); }
     <td>The panel has to be taken exclusively, or macOS moves the pointer
         relative to wherever it already was and the pen fights it. The cost is
         that the pen does nothing at all while the app is not running.</td>
+  </tr>
+  <tr>
+    <th>Zoom is stepped</th>
+    <td>A true pinch cannot be sent by any application without private APIs.
+        Spreading your fingers sends ⌘= instead, which is a whole zoom level at
+        a time rather than a smooth scale.</td>
+  </tr>
+  <tr>
+    <th>One three-finger gesture, not four</th>
+    <td>A trackpad also switches desktops and shows an application's windows.
+        Those run macOS's own shortcuts, and those shortcuts do not answer a
+        synthesised keystroke — so they are not offered rather than offered and
+        silently doing nothing.</td>
   </tr>
   <tr>
     <th>Pressure is off by default</th>
