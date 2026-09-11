@@ -237,9 +237,6 @@ final class HIDTouchDriver {
         }
         let display = resolution.display
         aim(at: display)
-        // Calibration belongs to a panel, so it is looked up and saved against
-        // the display we are actually aiming at.
-        calibrationController.displayIdentity = display.identity
 
         switch resolution.match {
         case .identity:    break
@@ -522,6 +519,18 @@ final class HIDTouchDriver {
         mapper.rotation = display.rotation
         penMapper.displayBounds = display.bounds
         penMapper.rotation = display.rotation
+
+        // Calibration belongs to a panel, so it follows the display too. This
+        // is not housekeeping: on waking, the driver takes the panel back
+        // before the display has finished coming back, falls through to the
+        // built-in screen, and files the calibration under *its* identity. The
+        // display then reappears a second later and the bounds are corrected
+        // here — but without this line the saved calibration stays looked up
+        // under the wrong screen, is never found, and every wake quietly
+        // demotes the panel to its raw descriptor range.
+        guard calibrationController.displayIdentity != display.identity else { return }
+        calibrationController.displayIdentity = display.identity
+        if let device = calibratedDevice { applyCalibration(for: device) }
     }
 
     /// Turn translation on or off, from any thread.
