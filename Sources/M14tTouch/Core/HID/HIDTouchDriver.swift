@@ -130,6 +130,8 @@ final class HIDTouchDriver {
     /// Signalled when the HID manager's cancellation has actually completed.
     private var cancellation: DispatchSemaphore?
 
+    private var isWatchingDisplays = false
+
     private var hasLoggedFirstValue = false
 
     /// Whether to narrate every recognised action to the system log.
@@ -230,8 +232,7 @@ final class HIDTouchDriver {
             return
         }
         let display = resolution.display
-        mapper.displayBounds = display.bounds
-        penMapper.displayBounds = display.bounds
+        aim(at: display)
         // Calibration belongs to a panel, so it is looked up and saved against
         // the display we are actually aiming at.
         calibrationController.displayIdentity = display.identity
@@ -316,6 +317,7 @@ final class HIDTouchDriver {
             self?.cancellation = nil
         }
         hasLoggedFirstValue = false
+        watchDisplayConfiguration()
         IOHIDManagerActivate(manager)
         log(config.penEnabled
             ? "✅ Listening — device held exclusively, so the pen is ours"
@@ -437,6 +439,55 @@ final class HIDTouchDriver {
         queue.async { [weak self] in self?.penPointer = pointer }
     }
 
+    /// Follow the display being rotated, moved or resized while running.
+    ///
+    /// Rotation is the one that matters: the panel keeps reporting where a
+    /// finger is on the glass, so a display turned in System Settings while the
+    /// driver is running would map every touch onto the wrong axis until the
+    /// app was restarted. Nobody would connect the two.
+    private func watchDisplayConfiguration() {
+        guard !isWatchingDisplays else { return }
+        isWatchingDisplays = true
+
+        CGDisplayRegisterReconfigurationCallback({ _, flags, context in
+            // Only once the change has happened. The callback fires twice, and
+            // the "about to" pass still reports the old geometry.
+            guard !flags.contains(.beginConfigurationFlag), let context else { return }
+            HIDTouchDriver.from(context).displayConfigurationChanged()
+        }, Unmanaged.passUnretained(self).toOpaque())
+    }
+
+    private func displayConfigurationChanged() {
+        queue.async { [weak self] in
+            guard let self,
+                  let resolved = DisplayResolver.resolve(self.config.display)
+            else { return }
+
+            let display = resolved.display
+            guard display.bounds != self.mapper.displayBounds
+                    || display.rotation != self.mapper.rotation
+            else { return }   // something else about the desktop changed
+
+            self.log("🖥️  Display changed: \(Int(display.bounds.width))×\(Int(display.bounds.height))"
+                     + " @ (\(Int(display.bounds.minX)),\(Int(display.bounds.minY)))"
+                     + ", rotation \(Int(display.rotation))°")
+            self.aim(at: display)
+        }
+    }
+
+    /// Point both mappers at a display.
+    ///
+    /// One place, because there are three callers and one of them used to set
+    /// the finger's bounds and not the pen's — so choosing a different display
+    /// in Settings left the pen aiming at the old one. Rotation would have
+    /// acquired the same bug on the same day.
+    private func aim(at display: DisplayInfo) {
+        mapper.displayBounds = display.bounds
+        mapper.rotation = display.rotation
+        penMapper.displayBounds = display.bounds
+        penMapper.rotation = display.rotation
+    }
+
     /// Turn translation on or off, from any thread.
     ///
     /// Asynchronous on purpose: a menu click must not wait on the touch queue,
@@ -494,7 +545,7 @@ final class HIDTouchDriver {
             self.mapper.invertX = settings.invertX
             self.mapper.invertY = settings.invertY
             if let resolved = DisplayResolver.resolve(settings.display) {
-                self.mapper.displayBounds = resolved.display.bounds
+                self.aim(at: resolved.display)
             }
 
             self.engine.setRecognizer(settings.mode.makeRecognizer(config: self.config))

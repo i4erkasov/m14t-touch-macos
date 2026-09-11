@@ -9,6 +9,12 @@ struct DisplayInfo: Equatable {
     let isMain: Bool
     let isBuiltin: Bool
     let identity: DisplayIdentity
+
+    /// Degrees counterclockwise, as the user set it in System Settings.
+    ///
+    /// Defaulted so the many places that build one of these for a test do not
+    /// all have to say "not rotated".
+    var rotation: Double = 0
 }
 
 extension DisplayInfo {
@@ -69,7 +75,8 @@ enum DisplayResolver {
                     vendor: CGDisplayVendorNumber(ids[i]),
                     model: CGDisplayModelNumber(ids[i]),
                     serial: CGDisplaySerialNumber(ids[i])
-                )
+                ),
+                rotation: CGDisplayRotation(ids[i])
             )
         }
     }

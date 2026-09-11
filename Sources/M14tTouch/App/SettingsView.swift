@@ -455,7 +455,9 @@ private struct DiagnosticsSettings: View {
                 ForEach(model.displays, id: \.index) { display in
                     LabeledContent(
                         "\(Int(display.bounds.width)) × \(Int(display.bounds.height))",
-                        value: "at \(Int(display.bounds.minX)), \(Int(display.bounds.minY))"
+                        value: display.rotation == 0
+                            ? "at \(Int(display.bounds.minX)), \(Int(display.bounds.minY))"
+                            : "at \(Int(display.bounds.minX)), \(Int(display.bounds.minY)) · rotated \(Int(display.rotation))°"
                     )
                 }
             }
