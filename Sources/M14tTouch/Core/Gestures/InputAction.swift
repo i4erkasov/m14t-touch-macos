@@ -61,7 +61,13 @@ enum InputAction: Equatable, Sendable {
     /// In points per second, at the moment of release. macOS produces this
     /// itself for a trackpad and cannot for a panel driven from user space, so
     /// the deceleration is generated here — see `ScrollMomentum`.
-    case scrollMomentum(velocity: CGVector)
+    ///
+    /// - Parameter restoresCursor: put the pointer back when the glide ends,
+    ///   rather than when the finger lifted. A scroll goes wherever the pointer
+    ///   is, so restoring it at the lift sent the rest of the glide to whatever
+    ///   window the pointer had returned to — the flick on one screen, the
+    ///   scrolling on another.
+    case scrollMomentum(velocity: CGVector, restoresCursor: Bool)
 
     /// The scrolling gesture is over — the finger has lifted.
     ///

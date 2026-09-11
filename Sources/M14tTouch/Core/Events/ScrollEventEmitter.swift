@@ -29,9 +29,14 @@ final class ScrollEventEmitter: EventEmitter {
     private let glideQueue = DispatchQueue(label: "com.m14ttouch.momentum")
     private var glide: DispatchSourceTimer?
 
+    /// Called when a glide finishes of its own accord, so the pointer can go
+    /// home. Set by whoever assembles the emitters, because putting the pointer
+    /// back is the mouse emitter's business and not this one's.
+    var onGlideEnded: (() -> Void)?
+
     func emit(_ action: InputAction) {
-        if case .scrollMomentum(let velocity) = action {
-            startGlide(from: velocity)
+        if case .scrollMomentum(let velocity, let restoresCursor) = action {
+            startGlide(from: velocity, restoringCursor: restoresCursor)
             return
         }
 
@@ -59,7 +64,7 @@ final class ScrollEventEmitter: EventEmitter {
     }
 
     /// Keep scrolling after the finger has gone, slowing to a stop.
-    private func startGlide(from velocity: CGVector) {
+    private func startGlide(from velocity: CGVector, restoringCursor: Bool) {
         stopGlide()
 
         var momentum = ScrollMomentum(velocity: velocity)
@@ -74,6 +79,9 @@ final class ScrollEventEmitter: EventEmitter {
                 // believing a glide is in progress.
                 post(vertical: 0, horizontal: 0, phase: nil, momentum: .end)
                 stopGlide()
+                // Only now: the pointer had to stay where the gesture was for
+                // as long as the glide was still scrolling there.
+                if restoringCursor { onGlideEnded?() }
                 return
             }
             guard let wheel = carried.take(x: Double(step.dx), y: Double(step.dy)) else { return }

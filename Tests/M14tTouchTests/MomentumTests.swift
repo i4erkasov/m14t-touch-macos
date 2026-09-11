@@ -87,7 +87,7 @@ final class MomentumTests: XCTestCase {
 
     private func momentum(in actions: [InputAction]) -> CGVector? {
         for action in actions {
-            if case .scrollMomentum(let velocity) = action { return velocity }
+            if case .scrollMomentum(let velocity, _) = action { return velocity }
         }
         return nil
     }
@@ -137,12 +137,84 @@ final class MomentumTests: XCTestCase {
         configuration.scrollThreshold = 10
         var recognizer = TouchscreenRecognizer(configuration: configuration)
 
+        // Several moving frames: the first commits to scrolling and consumes
+        // its own movement, so the speed is measured from the ones after it.
         _ = recognizer.process(frame(y: 900, touching: true, at: 0))
-        _ = recognizer.process(frame(y: 700, touching: true, at: 0.02))
-        let actions = recognizer.process(frame(y: 700, touching: false, at: 0.03))
+        _ = recognizer.process(frame(y: 800, touching: true, at: 0.02))
+        _ = recognizer.process(frame(y: 700, touching: true, at: 0.04))
+        _ = recognizer.process(frame(y: 600, touching: true, at: 0.06))
+        let actions = recognizer.process(frame(y: 600, touching: false, at: 0.07))
 
         XCTAssertNil(momentum(in: actions))
         XCTAssertEqual(actions, [.scrollEnd])
+    }
+
+    // The bug this guards, reported from use: the pointer went home the moment
+    // the finger lifted, while the glide carried on for another second — so the
+    // flick happened on the panel and the scrolling happened on whatever window
+    // the pointer had returned to.
+    func testThePointerIsNotTakenHomeWhileTheGlideIsStillRunning() {
+        var configuration = GestureConfiguration()
+        configuration.scrollMomentum = true
+        configuration.restoreCursor = true
+        configuration.scrollThreshold = 10
+        var recognizer = TouchscreenRecognizer(configuration: configuration)
+
+        // Several moving frames: the first commits to scrolling and consumes
+        // its own movement, so the speed is measured from the ones after it.
+        _ = recognizer.process(frame(y: 900, touching: true, at: 0))
+        _ = recognizer.process(frame(y: 800, touching: true, at: 0.02))
+        _ = recognizer.process(frame(y: 700, touching: true, at: 0.04))
+        _ = recognizer.process(frame(y: 600, touching: true, at: 0.06))
+        let actions = recognizer.process(frame(y: 600, touching: false, at: 0.07))
+
+        XCTAssertFalse(actions.contains(.cursorRestore), "the glide still needs the pointer")
+        guard case .scrollMomentum(_, let restores)? = actions.last else {
+            return XCTFail("expected a glide: \(actions)")
+        }
+        XCTAssertTrue(restores, "and it carries the instruction to put it back afterwards")
+    }
+
+    // Without a glide there is nothing to wait for, so it goes home at once.
+    func testThePointerGoesHomeAtOnceWhenThereIsNoGlide() {
+        var configuration = GestureConfiguration()
+        configuration.scrollMomentum = false
+        configuration.restoreCursor = true
+        configuration.scrollThreshold = 10
+        var recognizer = TouchscreenRecognizer(configuration: configuration)
+
+        // Several moving frames: the first commits to scrolling and consumes
+        // its own movement, so the speed is measured from the ones after it.
+        _ = recognizer.process(frame(y: 900, touching: true, at: 0))
+        _ = recognizer.process(frame(y: 800, touching: true, at: 0.02))
+        _ = recognizer.process(frame(y: 700, touching: true, at: 0.04))
+        _ = recognizer.process(frame(y: 600, touching: true, at: 0.06))
+        let actions = recognizer.process(frame(y: 600, touching: false, at: 0.07))
+
+        XCTAssertEqual(actions, [.scrollEnd, .cursorRestore])
+    }
+
+    // And a gesture that is not going to put the pointer back says so, rather
+    // than leaving the emitter to guess.
+    func testAGlideDoesNotRestoreWhenRestoringIsSwitchedOff() {
+        var configuration = GestureConfiguration()
+        configuration.scrollMomentum = true
+        configuration.restoreCursor = false
+        configuration.scrollThreshold = 10
+        var recognizer = TouchscreenRecognizer(configuration: configuration)
+
+        // Several moving frames: the first commits to scrolling and consumes
+        // its own movement, so the speed is measured from the ones after it.
+        _ = recognizer.process(frame(y: 900, touching: true, at: 0))
+        _ = recognizer.process(frame(y: 800, touching: true, at: 0.02))
+        _ = recognizer.process(frame(y: 700, touching: true, at: 0.04))
+        _ = recognizer.process(frame(y: 600, touching: true, at: 0.06))
+        let actions = recognizer.process(frame(y: 600, touching: false, at: 0.07))
+
+        guard case .scrollMomentum(_, let restores)? = actions.last else {
+            return XCTFail("expected a glide: \(actions)")
+        }
+        XCTAssertFalse(restores)
     }
 
     func testItIsOnByDefault() {

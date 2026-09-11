@@ -66,9 +66,17 @@ func makeEngine(for config: TouchConfig)
         policy: config.gestures.cursorHiding,
         visibility: PrivateCursorVisibility()
     )
+    // The glide outlives the gesture, and the pointer has to stay where the
+    // gesture was until it ends — a scroll goes wherever the pointer is. So the
+    // scroll emitter says when it has finished and the mouse emitter takes the
+    // pointer home then, rather than at the moment the finger lifted.
+    let mouse = MouseEventEmitter()
+    let scroll = ScrollEventEmitter()
+    scroll.onGlideEnded = { [weak mouse] in mouse?.emit(.cursorRestore) }
+
     let engine = TouchEngine(
         recognizer: config.mode.makeRecognizer(config: config),
-        emitter: RoutingEventEmitter(mouse: MouseEventEmitter(), scroll: ScrollEventEmitter()),
+        emitter: RoutingEventEmitter(mouse: mouse, scroll: scroll),
         cursorVisibility: cursorVisibility
     )
     return (engine, cursorVisibility)

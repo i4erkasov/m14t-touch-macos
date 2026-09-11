@@ -168,15 +168,26 @@ struct TouchscreenRecognizer: GestureRecognizer {
         case .scrolling(let lastPosition):
             guard contact.isTouching else {
                 state = .idle
-                var actions: [InputAction] = [.scrollEnd]
+                let momentum = ScrollMomentum(velocity: releaseVelocity(at: contact.timestamp))
+                scrollVelocity = .zero
+
                 // The glide comes after the end, in that order, because that is
                 // the order a trackpad sends them and what applications expect.
-                let momentum = ScrollMomentum(velocity: releaseVelocity(at: contact.timestamp))
-                if configuration.scrollMomentum, momentum.isWorthGliding {
-                    actions.append(.scrollMomentum(velocity: momentum.velocity))
+                guard configuration.scrollMomentum, momentum.isWorthGliding else {
+                    return finishing(with: [.scrollEnd])
                 }
-                scrollVelocity = .zero
-                return finishing(with: actions)
+
+                // No cursor restore here: the glide still needs the pointer
+                // where the gesture happened, and putting it back now would
+                // scroll whichever window it went home to. The glide carries
+                // the instruction and the restore happens when it finishes.
+                return [
+                    .scrollEnd,
+                    .scrollMomentum(
+                        velocity: momentum.velocity,
+                        restoresCursor: configuration.restoreCursor
+                    )
+                ]
             }
 
             // Note what is *not* here: the long-press deadline. That is the lock.
