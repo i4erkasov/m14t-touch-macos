@@ -243,7 +243,7 @@ private struct TouchSettings: View {
                 } header: {
                     Text("Zoom")
                 } footer: {
-                    Text("Sends ⌘ and a scroll, which browsers, Preview, Photos and Finder read as zoom. A true pinch cannot be sent by any app without private APIs, so applications that only understand a real one will not respond.")
+                    Text("Sends ⌘= and ⌘−, the zoom commands almost every app has. A true pinch cannot be sent without private APIs. Because these are keystrokes they go to the frontmost window, not to whatever is under your fingers.")
                 }
 
                 Section {

@@ -90,10 +90,12 @@ struct GestureConfiguration: Equatable, Codable {
     /// How much the fingers must separate, in panel-mapped points, for one
     /// zoom step.
     ///
-    /// Quantised deliberately. ⌘ + scroll is a stepped gesture in the
-    /// applications that receive it, so sending a step per pixel of movement
-    /// would zoom from minimum to maximum in one flick.
-    var zoomStep: Double = 40
+    /// Quantised deliberately, and coarsely. Each step is one press of ⌘=,
+    /// which is a whole zoom level in the application receiving it — and
+    /// applications have about ten of those. Fingers can separate by most of
+    /// the panel's width, so a fine step would run from minimum to maximum in
+    /// one spread.
+    var zoomStep: Double = 120
 
     /// When to hide the system pointer — the spec amendment's "Cursor during
     /// touch" setting.

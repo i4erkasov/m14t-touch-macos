@@ -181,13 +181,11 @@ struct TouchscreenRecognizer: GestureRecognizer {
 
         guard case .zooming(let previous, let carried) = state else {
             state = .zooming(distance: distance, carried: 0)
-            // A zoom has no destination of its own, exactly like a scroll: it
-            // goes wherever the pointer is. So the pointer is put between the
-            // fingers once, at the start, and left alone after that.
-            return [.pointerMove(position: CGPoint(
-                x: (first.x + second.x) / 2,
-                y: (first.y + second.y) / 2
-            ))]
+            // Nothing is emitted to open the gesture. Zoom is sent as ⌘= and
+            // ⌘-, which go to the frontmost window rather than to whatever is
+            // under the pointer, so moving the pointer would achieve nothing
+            // and cost a cursor warp.
+            return []
         }
 
         let moved = Double(distance - previous) + carried

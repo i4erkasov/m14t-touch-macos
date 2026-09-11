@@ -12,7 +12,7 @@ final class PinchTests: XCTestCase {
     private var configuration: GestureConfiguration {
         var configuration = GestureConfiguration()
         configuration.pinchToZoom = true
-        configuration.zoomStep = 40
+        configuration.zoomStep = 40   // smaller than the default, to keep these readable
         configuration.restoreCursor = false   // one thing at a time
         return configuration
     }
@@ -50,13 +50,13 @@ final class PinchTests: XCTestCase {
         ))
     }
 
-    // A zoom has no destination of its own, exactly like a scroll. The pointer
-    // has to be put between the fingers or the zoom lands on whatever window
-    // the arrow was left over.
-    func testTheFirstTwoFingerFrameMovesThePointerBetweenThem() {
+    // Zoom is sent as ⌘= and ⌘-, which go to the frontmost window rather than
+    // under the pointer, so opening the gesture moves nothing and emits
+    // nothing. Measured, not assumed: ⌘ with a scroll — the obvious route —
+    // was read as a plain scroll by the browser it was tested against.
+    func testOpeningTheGestureEmitsNothing() {
         var recognizer = self.recognizer()
-        let actions = recognizer.process(pinch(100))
-        XCTAssertEqual(actions, [.pointerMove(position: CGPoint(x: 500, y: 500))])
+        XCTAssertEqual(recognizer.process(pinch(100)), [])
     }
 
     func testSpreadingByOneStepZoomsIn() {
@@ -167,7 +167,30 @@ final class PinchTests: XCTestCase {
         XCTAssertEqual(recognizer.reset(), [])
 
         // A fresh gesture is recognised afterwards, so the state really cleared.
-        XCTAssertEqual(recognizer.process(pinch(100, at: 1.0)),
-                       [.pointerMove(position: CGPoint(x: 500, y: 500))])
+        XCTAssertEqual(recognizer.process(pinch(100, at: 1.0)), [])
+        XCTAssertEqual(recognizer.process(pinch(140, at: 1.1)), [.zoom(steps: 1)])
+    }
+}
+
+/// Where a zoom is sent.
+final class ZoomRoutingTests: XCTestCase {
+
+    // It is not a scroll, however much it looks like one. Sending it as ⌘ with
+    // a scroll was tried first and measured: the browser read it as a plain
+    // scroll and ran to the top of the page, both with the flag set on the
+    // event and with Command genuinely held down.
+    func testZoomGoesToTheKeyboardAndNothingElseDoes() {
+        let mouse = RecordingEventEmitter()
+        let scroll = RecordingEventEmitter()
+        let keyboard = RecordingEventEmitter()
+        let router = RoutingEventEmitter(mouse: mouse, scroll: scroll, keyboard: keyboard)
+
+        router.emit(.zoom(steps: 2))
+        router.emit(.scroll(deltaX: 0, deltaY: 5))
+        router.emit(.tap(position: .zero))
+
+        XCTAssertEqual(keyboard.actions, [.zoom(steps: 2)])
+        XCTAssertEqual(scroll.actions, [.scroll(deltaX: 0, deltaY: 5)])
+        XCTAssertEqual(mouse.actions, [.tap(position: .zero)])
     }
 }
