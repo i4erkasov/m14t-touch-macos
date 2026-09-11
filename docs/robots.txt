@@ -1,0 +1,6 @@
+# Everything is public and crawlable; this file exists to say so plainly and to
+# point at the sitemap, not to restrict anything.
+User-agent: *
+Allow: /
+
+Sitemap: https://i4erkasov.github.io/m14t-touch-macos/sitemap.xml
