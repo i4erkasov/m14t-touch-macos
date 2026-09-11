@@ -26,6 +26,7 @@ enum HID {
         /// Used as a report boundary and as a heartbeat, never as a clock: the
         /// descriptor caps it at 65535, which at 100 µs per unit wraps every 6.5
         /// seconds. Durations are measured from a monotonic system timestamp.
+        case confidence = 0x47
         case contactIdentifier = 0x51
         case contactCount = 0x54
         case contactCountMaximum = 0x55

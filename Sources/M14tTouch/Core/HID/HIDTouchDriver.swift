@@ -81,6 +81,20 @@ final class HIDTouchDriver {
     private var currentRawY: Double = 0
     private var isTipSwitchDown = false
 
+    /// Every contact slot the panel has, keyed by its `Finger` collection.
+    private var slots: [IOHIDElementCookie: TouchSlot] = [:]
+
+    /// Which collection each element belongs to, worked out once per element.
+    private var slotOfElement: [IOHIDElementCookie: IOHIDElementCookie] = [:]
+
+    /// The slot driving the pointer.
+    ///
+    /// The first finger down keeps it until it lifts. Without a fixed choice
+    /// the pointer would jump between fingers mid-gesture, which is exactly
+    /// what two fingers on this panel used to do — both wrote to one pair of
+    /// coordinates and the pointer chased whichever reported last.
+    private var primarySlot: IOHIDElementCookie?
+
     /// The device calibration was taken from, once one has actually sent input.
     private var calibratedDevice: IOHIDDevice?
 
@@ -611,6 +625,7 @@ final class HIDTouchDriver {
         // it from the queue itself would deadlock, and nothing does.
         queue.sync {
             isTipSwitchDown = false
+            forgetContacts()
             logActions(engine.reset())
             for action in pen.reset() { dispatch(action) }
 
@@ -666,6 +681,7 @@ final class HIDTouchDriver {
         log("🔌 Touch device disconnected")
         // Release any held button so the cursor doesn't get stuck pressed.
         isTipSwitchDown = false
+        forgetContacts()
         logActions(engine.reset())
 
         // The pen too: a stroke that never ends leaves a button pressed with no
@@ -700,6 +716,7 @@ final class HIDTouchDriver {
     /// Hand the descriptor range and any saved file to the controller, then put
     /// its verdict into the mapper.
     private func applyCalibration(for device: IOHIDDevice) {
+        countContactSlots(of: device)
         let descriptorRange = readDescriptorRange(from: device)
 
         // The descriptor's proportions, not the saved calibration's: calibration
@@ -788,18 +805,30 @@ final class HIDTouchDriver {
         switch (page, usage) {
 
         case (HID.Page.genericDesktop.rawValue, HID.GenericDesktop.x.rawValue):
-            currentRawX = Double(intVal)
-            live.rawX = currentRawX
-            live.screen = mapper.map(rawX: currentRawX, rawY: currentRawY)
+            updateSlot(of: element) { $0.rawX = Double(intVal) }
+            if slot(of: element) == primarySlot {
+                currentRawX = Double(intVal)
+                live.rawX = currentRawX
+                live.screen = mapper.map(rawX: currentRawX, rawY: currentRawY)
+            }
             recordForAutoCalibration(x: Double(intVal))
             emitFrameIfUnbatched()
 
         case (HID.Page.genericDesktop.rawValue, HID.GenericDesktop.y.rawValue):
-            currentRawY = Double(intVal)
-            live.rawY = currentRawY
-            live.screen = mapper.map(rawX: currentRawX, rawY: currentRawY)
+            updateSlot(of: element) { $0.rawY = Double(intVal) }
+            if slot(of: element) == primarySlot {
+                currentRawY = Double(intVal)
+                live.rawY = currentRawY
+                live.screen = mapper.map(rawX: currentRawX, rawY: currentRawY)
+            }
             recordForAutoCalibration(y: Double(intVal))
             emitFrameIfUnbatched()
+
+        case (HID.Page.digitizer.rawValue, HID.Digitizer.confidence.rawValue):
+            updateSlot(of: element) { $0.isConfident = intVal != 0 }
+
+        case (HID.Page.digitizer.rawValue, HID.Digitizer.contactIdentifier.rawValue):
+            updateSlot(of: element) { $0.contactID = Int(intVal) }
 
         // Declared by the descriptor; whether this panel ever fills them in is
         // the open question about multi-touch, and this is what answers it.
@@ -811,25 +840,18 @@ final class HIDTouchDriver {
 
         case (HID.Page.digitizer.rawValue, HID.Digitizer.tipSwitch.rawValue):
             let down = intVal != 0
-
-            // Palm rejection, decided the moment the finger lands rather than
-            // on every frame (pen spec §15). A hand resting on the panel to
-            // write with is the case this exists for; the pen's proximity is
-            // what tells it from a deliberate touch.
-            //
-            // The decision is made once and held for the life of the contact:
-            // a touch that was ignored must not spring to life halfway through
-            // because the pen moved away, which would be worse than ignoring it
-            // outright.
-            if down, !isTipSwitchDown {
-                suppressingFingerContact = config.pen.palmRejection && penInRange
-            } else if !down {
-                suppressingFingerContact = false
+            updateSlot(of: element) { $0.isTouching = down }
+            if let cookie = slot(of: element) {
+                refreshPrimary(cookie: cookie, wentDown: down)
             }
 
+            // The pointer follows one finger, so what "touching" means to the
+            // single-touch recognizers is whether *that* finger is down.
+            isTipSwitchDown = primarySlot != nil
+            live.isTouching = isTipSwitchDown
+            live.contactCount = slots.values.filter(\.isTouching).count
+
             // Contact changes are urgent — see the note on frame cadence.
-            isTipSwitchDown = down
-            live.isTouching = down
             emitFrame()
 
         case (HID.Page.digitizer.rawValue, HID.Digitizer.scanTime.rawValue):
@@ -983,19 +1005,132 @@ final class HIDTouchDriver {
     /// The mapping always uses the calibration in force at that moment —
     /// `recordForAutoCalibration` runs first, so a sample that widens the range
     /// is mapped with the widened one.
+    /// How many fingers this panel can report at once, from the descriptor.
+    ///
+    /// Counted rather than read: the panel declares `ContactCountMaximum` and
+    /// never sends a value for it, so the number of `Finger` collections is the
+    /// only statement of the limit available. On the M14t there are five.
+    private func countContactSlots(of device: IOHIDDevice) {
+        guard let elements = IOHIDDeviceCopyMatchingElements(device, nil, 0) as? [IOHIDElement]
+        else { return }
+
+        let fingers = elements.filter {
+            IOHIDElementGetType($0) == kIOHIDElementTypeCollection
+                && IOHIDElementGetUsagePage($0) == HID.Page.digitizer.rawValue
+                && IOHIDElementGetUsage($0) == HID.Digitizer.finger.rawValue
+        }
+        guard !fingers.isEmpty else { return }
+        live.contactCountMaximum = fingers.count
+        log("👆 Contact slots: \(fingers.count)")
+    }
+
+    /// Forget every contact, for a device that has gone away mid-gesture.
+    ///
+    /// Slots are not cleared on a lift — a slot that has been used keeps its
+    /// last coordinates, which is how the panel reports — so they have to be
+    /// cleared explicitly when there is no longer a panel to report them.
+    private func forgetContacts() {
+        slots.removeAll()
+        primarySlot = nil
+        live.contactCount = 0
+    }
+
+    /// The `Finger` collection an element belongs to, or nil if it is not in
+    /// one — the panel has collections for other things too.
+    private func slot(of element: IOHIDElement) -> IOHIDElementCookie? {
+        let cookie = IOHIDElementGetCookie(element)
+        if let known = slotOfElement[cookie] { return known }
+
+        var node = IOHIDElementGetParent(element)
+        while let current = node {
+            if IOHIDElementGetUsagePage(current) == HID.Page.digitizer.rawValue,
+               IOHIDElementGetUsage(current) == HID.Digitizer.finger.rawValue {
+                let owner = IOHIDElementGetCookie(current)
+                slotOfElement[cookie] = owner
+                return owner
+            }
+            node = IOHIDElementGetParent(current)
+        }
+        return nil
+    }
+
+    /// Apply a change to the slot an element belongs to.
+    private func updateSlot(of element: IOHIDElement, _ change: (inout TouchSlot) -> Void) {
+        guard let cookie = slot(of: element) else { return }
+        var slot = slots[cookie] ?? TouchSlot()
+        change(&slot)
+        slots[cookie] = slot
+    }
+
+    /// Decide which slot drives the pointer, after one has gone down or up.
+    ///
+    /// A finger that lifts while others are still down does *not* hand the
+    /// pointer to one of them. Promoting a survivor would teleport the cursor
+    /// to wherever that other finger happened to be, in the middle of whatever
+    /// the user was doing; waiting for a clean start is the lesser surprise.
+    private func refreshPrimary(cookie: IOHIDElementCookie, wentDown: Bool) {
+        if wentDown {
+            guard primarySlot == nil else { return }
+            primarySlot = cookie
+
+            // Palm rejection, decided the moment the pointer's finger lands and
+            // held for the life of that contact (pen spec §15).
+            suppressingFingerContact = config.pen.palmRejection && penInRange
+        } else if primarySlot == cookie {
+            primarySlot = nil
+            suppressingFingerContact = false
+        }
+    }
+
+    /// Contacts currently on the glass, the pointer's first.
+    ///
+    /// Confidence is honoured: the panel says whether it believes a contact is
+    /// a fingertip, and that judgement is better informed than anything this
+    /// driver could make from coordinates.
+    private func currentContacts(at timestamp: TimeInterval) -> [TouchPoint] {
+        let touching = slots
+            .filter { $0.value.isTouching && $0.value.isConfident }
+            .sorted { lhs, rhs in
+                if lhs.key == primarySlot { return true }
+                if rhs.key == primarySlot { return false }
+                return lhs.key < rhs.key
+            }
+
+        return touching.map { cookie, slot in
+            TouchPoint(
+                id: slot.contactID,
+                position: mapper.map(rawX: slot.rawX, rawY: slot.rawY),
+                rawPosition: CGPoint(x: slot.rawX, y: slot.rawY),
+                isTouching: true,
+                pressure: nil,
+                timestamp: timestamp
+            )
+        }
+    }
+
     private func emitFrame() {
-        let contact = TouchPoint(
-            id: TouchPoint.primary,
-            position: mapper.map(rawX: currentRawX, rawY: currentRawY),
-            rawPosition: CGPoint(x: currentRawX, y: currentRawY),
-            isTouching: isTipSwitchDown,
-            pressure: nil,
-            timestamp: ProcessInfo.processInfo.systemUptime
-        )
         // A contact that began under the pen stays ignored for its whole life.
         if suppressingFingerContact { return }
 
-        let frame = TouchFrame(contact: contact)
+        let timestamp = ProcessInfo.processInfo.systemUptime
+        var contacts = currentContacts(at: timestamp)
+
+        // A frame with nothing on it still has to be delivered, and still has
+        // to carry a point: the single-touch recognizers end a gesture by
+        // seeing a contact that is no longer touching, and an empty frame would
+        // be silence rather than a release.
+        if contacts.isEmpty {
+            contacts = [TouchPoint(
+                id: TouchPoint.primary,
+                position: mapper.map(rawX: currentRawX, rawY: currentRawY),
+                rawPosition: CGPoint(x: currentRawX, y: currentRawY),
+                isTouching: false,
+                pressure: nil,
+                timestamp: timestamp
+            )]
+        }
+
+        let frame = TouchFrame(contacts: contacts, timestamp: timestamp)
 
         if let frameObserver {
             DispatchQueue.main.async { frameObserver(frame) }
