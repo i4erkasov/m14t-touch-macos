@@ -19,11 +19,36 @@ recovered from the element's parent, or the driver has to move to
 descriptor. Either is a real chunk of work, and the second is what the frame
 model in `TouchFrame` was shaped for.
 
-**Unknown, and cheap to settle:** whether this panel reports two contacts at all.
-Its descriptor declares `ContactID` (0x51), `ContactCount` (0x54) and
-`ContactCountMaximum` (0x55), but no values for them were ever observed, because
-every probe so far used one finger. A minute with a two-finger probe answers it,
-and until it is answered the rest is hypothetical.
+**Settled: it does.** A two-finger probe was finally run — one finger, then two,
+then two spread apart — with every HID value traced. The panel reports genuine
+multi-touch.
+
+Each contact arrives as its own small report:
+
+    X = 9499 · ContactID = 2 · Confidence = 1 · TipSwitch = 1 · Y = 3534
+
+and the reports interleave. During the spread, the X values alternate between
+two clusters moving in opposite directions:
+
+    9415 9824 9423 9819 9429 9815 9434 9812 9438 9809 9442 9806 …
+
+one rising, one falling — the two fingers, sampled alternately. `TipSwitch`
+went down and up exactly five times for the five contacts made.
+
+Two details matter for whoever implements this:
+
+- **`ContactID` is the only identity available.** Observed values were `0` and
+  `2` — not `0` and `1`, so nothing may assume they are consecutive or small.
+- **`ContactCount` (0x54) is never sent**, nor `ContactCountMaximum`. How many
+  fingers are down has to be inferred from which contact IDs are currently
+  reporting `TipSwitch = 1`, not read.
+
+There is also `Confidence` (0x47), which the panel sets to 0 or 1 — the
+hardware's own opinion of whether a contact is a real fingertip. That is palm
+rejection available for free, and better informed than ours.
+
+The driver currently overwrites one pair of coordinates from every contact, so
+two fingers behave like one jittering finger. The data was always there.
 
 ### Emitting a zoom — no public way to send a real one
 
