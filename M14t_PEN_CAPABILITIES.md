@@ -203,7 +203,7 @@ held during contact is a real eraser to the hardware and cannot be presented as
 one to applications. It stays what `PenTouchAction` already offers — nothing, or
 an ordinary stroke.
 
-## Portrait is spoiled by the monitor, not by macOS
+## Portrait needs turning on twice
 
 The driver follows `CGDisplayRotation` and re-aims itself when a display is
 rotated while it is running. Verified on the panel: setting 90° in System
@@ -220,18 +220,21 @@ rendering a correct 1080×1920 desktop for it. The scaling is internal to the
 monitor's firmware; macOS reports a full-size rotated framebuffer and has no
 idea the panel is showing it letterboxed.
 
-So touch in portrait cannot be made correct from here. The driver would have to
-know the letterbox geometry, and nothing reports it. If the monitor's own on-
-screen menu offers a scaling mode ("fill" rather than "fit") or a way to turn
-its rotation handling off, portrait becomes usable; otherwise it is not, and the
-reason is the hardware.
+**The answer is in the monitor's own menu.** Rotation has to be set in *both*
+places — on the monitor itself and in System Settings — and once it is, the
+letterboxing goes and portrait works properly. Setting only one of them is what
+produces the band across the middle: macOS rendering a rotated desktop that the
+monitor is still fitting as though it were landscape, or the reverse.
+
+Worth knowing before concluding, as was nearly done here, that the hardware
+cannot do it.
 
 **Still unverified:** which way round the quarter turns go. The mapping is
 derived and unit tested — corner by corner, plus the properties that catch a
-reversed sign — but it has never been confirmed against a rotated panel,
-because this panel cannot show a rotated picture worth touching. If a display
-that rotates properly is ever available, touch the corners: 90° and 270° being
-swapped is the one plausible error, and it is two lines to correct.
+reversed sign — but no touch has yet been made on a correctly rotated panel. Now
+that portrait does work, that is one minute's checking: rotate, touch the four
+corners, and see whether they land where they were touched. A swapped 90°/270°
+is the one plausible error left, and it is two lines to correct.
 
 ## The pen can stop transmitting, and the stylus is the likeliest culprit
 
