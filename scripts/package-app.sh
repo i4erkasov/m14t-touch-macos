@@ -37,6 +37,15 @@ rm -rf "$DESTINATION"
 mkdir -p "$DESTINATION/Contents/MacOS" "$DESTINATION/Contents/Resources"
 cp "$BINARY" "$DESTINATION/Contents/MacOS/m14ttouch"
 
+# The icon. Not decoration: the app has no Dock presence, so this is what
+# identifies it in Finder, in the disk image, and — the one that matters — in
+# the Privacy & Security lists where its permissions are granted.
+if [ -f resources/AppIcon.icns ]; then
+    cp resources/AppIcon.icns "$DESTINATION/Contents/Resources/AppIcon.icns"
+else
+    echo "  (no resources/AppIcon.icns — run scripts/make-app-icon.swift)"
+fi
+
 cat > "$DESTINATION/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -46,6 +55,7 @@ cat > "$DESTINATION/Contents/Info.plist" <<PLIST
     <key>CFBundleDisplayName</key><string>${APP_NAME}</string>
     <key>CFBundleIdentifier</key><string>${BUNDLE_ID}</string>
     <key>CFBundleExecutable</key><string>m14ttouch</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>${VERSION}</string>
     <key>CFBundleVersion</key><string>${VERSION}</string>
