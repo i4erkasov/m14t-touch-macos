@@ -11,7 +11,7 @@ Reads the monitor's USB HID digitizer via `IOHIDManager` and posts synthetic
 This repo is a **fork** of `talesmousinho/m14t-touch-macos` (remote: `upstream`),
 currently identical to it at commit `bb2294f`.
 
-The goal of the fork is defined in **`M14t_Touch_Manager_TZ.md`** — the spec.
+The goal of the fork is defined in **`docs/spec/M14t_Touch_Manager_TZ.md`** — the spec.
 It turns the current "finger drags the mouse cursor" CLI into a proper
 touchscreen translation layer with a SwiftUI menu-bar app.
 **Read the spec before any non-trivial change.** Key sections:

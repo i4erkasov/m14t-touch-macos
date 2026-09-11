@@ -146,7 +146,7 @@ something wrong. `--no-pen` gives the device back if you would rather have the
 old behaviour.
 
 What the hardware turned out to do, all of it measured rather than assumed
-(`M14t_PEN_CAPABILITIES.md`):
+(`docs/M14t_PEN_CAPABILITIES.md`):
 
 | | |
 |---|---|

@@ -25,7 +25,7 @@ struct AppSettings: Equatable, Codable {
     /// Switching this on takes the device away from macOS exclusively, which is
     /// the only way to stop it moving the pointer relative to wherever it
     /// already is — hovering over the panel otherwise drags the pointer around
-    /// whichever screen it was left on (`M14t_PEN_CAPABILITIES.md`).
+    /// whichever screen it was left on (`docs/M14t_PEN_CAPABILITIES.md`).
     ///
     /// The cost is that seizing takes the *whole* device, so the pen stops
     /// working entirely when the driver is not running, where today it works

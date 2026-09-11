@@ -8,7 +8,7 @@ import Foundation
 /// on the other side, is exactly the situation in which an exclusive claim goes
 /// stale — the collection stops reporting while the driver still believes it
 /// owns it. That failure has been seen on this hardware
-/// (`M14t_PEN_CAPABILITIES.md`), and unplugging the cable was the only cure.
+/// (`docs/M14t_PEN_CAPABILITIES.md`), and unplugging the cable was the only cure.
 /// Releasing before sleep and taking the panel again afterwards removes the
 /// occasion for it.
 ///

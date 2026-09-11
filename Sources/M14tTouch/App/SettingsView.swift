@@ -502,7 +502,7 @@ private struct DiagnosticsSettings: View {
                 // What the panel does was measured, not read off a datasheet;
                 // a live view of the HID stream is a later piece of work and is
                 // not implied here.
-                Text("Established by testing this panel. See M14t_PEN_CAPABILITIES.md.")
+                Text("Established by testing this panel. See docs/M14t_PEN_CAPABILITIES.md.")
             }
 
             Section {

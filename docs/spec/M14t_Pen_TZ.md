@@ -1202,7 +1202,7 @@ Mouse fallback: ...
 - raw usages/ranges;
 - live diagnostics;
 - manual test procedure;
-- `M14t_PEN_CAPABILITIES.md`.
+- `docs/M14t_PEN_CAPABILITIES.md`.
 
 Никакой speculative pressure injection.
 
@@ -1317,7 +1317,7 @@ Pressure в third-party apps входит в Definition of Done только п�
 
 # 43. Первый prompt для coding agent
 
-> Реализуй только **Pen Research / Diagnostics Phase** из `M14t_Pen_TZ.md`. Не реализовывай speculative pressure injection, tilt behavior, eraser behavior, button mappings или private tablet APIs до получения фактических данных устройства.
+> Реализуй только **Pen Research / Diagnostics Phase** из `docs/spec/M14t_Pen_TZ.md`. Не реализовывай speculative pressure injection, tilt behavior, eraser behavior, button mappings или private tablet APIs до получения фактических данных устройства.
 >
 > Сначала изучи существующий HID код проекта и определи, как сейчас обрабатывается `Pen and multitouch sensor`.
 >
@@ -1329,7 +1329,7 @@ Pressure в third-party apps входит в Definition of Done только п�
 >
 > После этого попроси пользователя пройти manual tests: hover, tip, pressure, каждая физическая кнопка, tilt и eraser.
 >
-> На основании фактического лога создай `M14t_PEN_CAPABILITIES.md` с таблицей поддерживаемых/неподдерживаемых/непроверенных возможностей, диапазонами HID значений и рекомендацией следующего шага.
+> На основании фактического лога создай `docs/M14t_PEN_CAPABILITIES.md` с таблицей поддерживаемых/неподдерживаемых/непроверенных возможностей, диапазонами HID значений и рекомендацией следующего шага.
 >
 > Не считать capability поддерживаемой только потому, что соответствующий HID enum/API существует.
 >

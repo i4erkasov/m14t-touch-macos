@@ -5,7 +5,7 @@ import Foundation
 ///
 /// Not a guess at what a button might mean: the device reports `Eraser` in place
 /// of `TipSwitch` when the near button is held, and the two never overlap
-/// (`M14t_PEN_CAPABILITIES.md`).
+/// (`docs/M14t_PEN_CAPABILITIES.md`).
 enum PenTool: Equatable {
     case tip
     case eraser

@@ -90,7 +90,7 @@ struct PenConfiguration: Equatable, Codable {
     ///
     /// Measured to work at the event level: an event marked as a tablet point
     /// arrives with its pressure intact, where an ordinary mouse event carries
-    /// only 1 or 0 (`M14t_PEN_CAPABILITIES.md`).
+    /// only 1 or 0 (`docs/M14t_PEN_CAPABILITIES.md`).
     ///
     /// **Off by default, and that is not caution — it is a finding.** Marking
     /// events as tablet points was tried on by default and broke a real

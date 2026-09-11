@@ -227,7 +227,7 @@ final class HIDTouchDriver {
             invertY: config.invertY
         )
         // The pen's own space, which is not the finger's: 0…30931 × 0…17399
-        // against 0…12372 × 0…6960 (`M14t_PEN_CAPABILITIES.md`). Using one
+        // against 0…12372 × 0…6960 (`docs/M14t_PEN_CAPABILITIES.md`). Using one
         // calibration for both would put the pen at a third of the screen.
         self.penMapper = CoordinateMapper(
             calibration: CalibrationData(xMin: 0, xMax: 30931, yMin: 0, yMax: 17399),
@@ -343,7 +343,7 @@ final class HIDTouchDriver {
     ///
     /// For the failure this cannot otherwise recover from: the pen collection
     /// falls silent while the finger keeps working, and unplugging the cable is
-    /// the only known cure (`M14t_PEN_CAPABILITIES.md`). Releasing and
+    /// the only known cure (`docs/M14t_PEN_CAPABILITIES.md`). Releasing and
     /// re-seizing is the same shape of remedy without reaching behind the desk,
     /// and it costs nothing to try before doing that.
     ///
@@ -947,7 +947,7 @@ final class HIDTouchDriver {
     private func publishPenSample() {
         // Contact comes from the switches, never from a pressure threshold: the
         // panel reports non-zero pressure at transitions while nothing is
-        // touching (`M14t_PEN_CAPABILITIES.md`).
+        // touching (`docs/M14t_PEN_CAPABILITIES.md`).
         let tool: PenTool? = penEraserDown ? .eraser : (penTipDown ? .tip : nil)
         let position = penMapper.map(rawX: penRawX, rawY: penRawY)
 

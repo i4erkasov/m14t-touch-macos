@@ -18,7 +18,7 @@ struct CGEventPoster {
     ///   that pressure, or nil for an ordinary mouse event. Measured: an event
     ///   marked as a tablet point arrives at an application with its pressure
     ///   intact, where a plain mouse event only ever carries 1 or 0
-    ///   (`M14t_PEN_CAPABILITIES.md`).
+    ///   (`docs/M14t_PEN_CAPABILITIES.md`).
     func post(_ type: CGEventType, at point: CGPoint, pressure: Double? = nil) {
         guard let event = CGEvent(
             mouseEventSource: nil,

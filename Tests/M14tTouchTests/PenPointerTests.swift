@@ -121,7 +121,7 @@ final class PenPointerTests: XCTestCase {
 
 /// Pressure, which measurement showed applications actually receive.
 ///
-/// See `M14t_PEN_CAPABILITIES.md`: a stroke marked as a tablet point arrives
+/// See `docs/M14t_PEN_CAPABILITIES.md`: a stroke marked as a tablet point arrives
 /// with its pressure intact, while an ordinary click carries only 1 or 0.
 final class PenPressureTests: XCTestCase {
 

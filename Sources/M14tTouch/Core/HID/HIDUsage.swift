@@ -39,7 +39,7 @@ enum HID {
 
         // Pen state. Every one of these was observed on the device; tilt and a
         // second barrel switch are declared by the descriptor and never sent,
-        // so they are deliberately absent (`M14t_PEN_CAPABILITIES.md`).
+        // so they are deliberately absent (`docs/M14t_PEN_CAPABILITIES.md`).
         case tipPressure = 0x30
         case inRange = 0x32
         case invert = 0x3C

@@ -1,7 +1,7 @@
 # M14t pen capabilities
 
 What the Lenovo ThinkVision M14t and its stylus actually do on macOS 26, as
-observed. Written per `M14t_Pen_TZ.md` §39, at the end of the research phase it
+observed. Written per `docs/spec/M14t_Pen_TZ.md` §39, at the end of the research phase it
 requires before any pen code is written.
 
 **Every line here is from a measurement, not from a datasheet or a HID table.**

@@ -4,7 +4,7 @@ import Foundation
 ///
 /// The M14t is one device with two collections rather than two devices, so this
 /// cannot be answered by asking which device sent a value — it has to come from
-/// the collection the element sits in (`M14t_PEN_CAPABILITIES.md`).
+/// the collection the element sits in (`docs/M14t_PEN_CAPABILITIES.md`).
 enum InputSource: Equatable {
     case finger
     case pen
