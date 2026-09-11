@@ -15,8 +15,13 @@ struct RoutingEventEmitter: EventEmitter {
     /// these for a test need not know.
     var keyboard: EventEmitter = KeyboardEventEmitter()
 
+    /// Asking the system for something, rather than sending it input.
+    var workspace: EventEmitter = WorkspaceEventEmitter()
+
     func emit(_ action: InputAction) {
         switch action {
+        case .showAllWindows:
+            workspace.emit(action)
         case .zoom:
             keyboard.emit(action)
         case .scroll, .scrollEnd:

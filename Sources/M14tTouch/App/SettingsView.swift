@@ -247,6 +247,20 @@ private struct TouchSettings: View {
                 }
 
                 Section {
+                    Toggle("Swipe up with three fingers", isOn: gestures.threeFingerSwipe)
+                    if model.settings.gestures.threeFingerSwipe {
+                        Stepper(
+                            "After \(Int(model.settings.gestures.swipeThreshold)) px",
+                            value: gestures.swipeThreshold, in: 40...400, step: 10
+                        )
+                    }
+                } header: {
+                    Text("Show all windows")
+                } footer: {
+                    Text("Opens Mission Control. Only this one gesture: the others a trackpad offers run macOS's own shortcuts, and those cannot be triggered by an app.")
+                }
+
+                Section {
                     Stepper(
                         "Hold for \(Int(model.settings.gestures.longPressDelay * 1000)) ms",
                         value: gestures.longPressDelay, in: 0.1...2, step: 0.05

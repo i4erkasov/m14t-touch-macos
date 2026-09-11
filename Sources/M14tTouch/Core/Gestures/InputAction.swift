@@ -30,6 +30,15 @@ enum InputAction: Equatable, Sendable {
     /// Not produced in v0.1 (spec §7.2, §23).
     case scroll(deltaX: CGFloat, deltaY: CGFloat)
 
+    /// Show every open window — what a trackpad does for three fingers up.
+    ///
+    /// Named for what the user wanted rather than for how it is delivered,
+    /// because how it is delivered was not a free choice: macOS's own shortcut
+    /// for this cannot be triggered by a synthesised keystroke, and opening
+    /// `Mission Control.app` is the route that does work
+    /// (`docs/pinch-and-multitouch.md`).
+    case showAllWindows
+
     /// Zoom by whole steps, positive to zoom in.
     ///
     /// Steps rather than a continuous scale, because what carries this is

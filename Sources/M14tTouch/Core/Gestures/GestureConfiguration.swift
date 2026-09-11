@@ -97,6 +97,17 @@ struct GestureConfiguration: Equatable, Codable {
     /// one spread.
     var zoomStep: Double = 120
 
+    /// Swipe up with three fingers to show every window.
+    ///
+    /// Only up, and only this one gesture. The others a trackpad offers —
+    /// application windows, switching desktops — are system shortcuts, and
+    /// system shortcuts do not answer synthesised keystrokes. Offering a swipe
+    /// that silently did nothing would be worse than not offering it.
+    var threeFingerSwipe: Bool = true
+
+    /// How far three fingers must travel before the swipe counts, in points.
+    var swipeThreshold: Double = 120
+
     /// When to hide the system pointer — the spec amendment's "Cursor during
     /// touch" setting.
     ///
@@ -151,6 +162,8 @@ extension GestureConfiguration {
         restoreCursor = value(.restoreCursor, fallback.restoreCursor)
         pinchToZoom = value(.pinchToZoom, fallback.pinchToZoom)
         zoomStep = value(.zoomStep, fallback.zoomStep)
+        threeFingerSwipe = value(.threeFingerSwipe, fallback.threeFingerSwipe)
+        swipeThreshold = value(.swipeThreshold, fallback.swipeThreshold)
         cursorHiding = value(.cursorHiding, fallback.cursorHiding)
         longPressDelay = value(.longPressDelay, fallback.longPressDelay)
         dragThreshold = value(.dragThreshold, fallback.dragThreshold)

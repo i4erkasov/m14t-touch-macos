@@ -34,6 +34,11 @@ struct TouchscreenRecognizer: GestureRecognizer {
         /// step was measured from, and the fraction of a step left over.
         case zooming(distance: CGFloat, carried: Double)
 
+        /// Three fingers are down. Carries where their middle started, and
+        /// whether the swipe has already fired — it fires once, not once per
+        /// frame for as long as the fingers keep travelling.
+        case swiping(origin: CGPoint, fired: Bool)
+
         /// The contact did something this configuration does not recognise, and
         /// nothing more will come of it until the finger lifts.
         case abandoned
@@ -48,10 +53,21 @@ struct TouchscreenRecognizer: GestureRecognizer {
     mutating func process(_ frame: TouchFrame) -> [InputAction] {
         guard let contact = frame.primaryContact else { return [] }
 
-        // Two fingers first, whatever the one-finger state machine was doing.
-        // A second finger landing means the user has changed their mind about
+        // More fingers first, whatever the state machine was doing with fewer.
+        // Another finger landing means the user has changed their mind about
         // what this gesture is, and the most recent statement wins.
         let touching = frame.contacts.filter(\.isTouching)
+
+        if configuration.threeFingerSwipe, touching.count >= 3 {
+            return swipe(touching)
+        }
+        if case .swiping = state {
+            // Fingers are coming off. Nothing that remains may inherit the
+            // gesture — not a zoom from two of them, not a scroll from one.
+            state = contact.isTouching ? .abandoned : .idle
+            return []
+        }
+
         if configuration.pinchToZoom, touching.count >= 2 {
             return pinch(touching)
         }
@@ -160,12 +176,38 @@ struct TouchscreenRecognizer: GestureRecognizer {
             if !contact.isTouching { state = .idle }
             return []
 
-        case .zooming:
-            // Unreachable: a zoom with fewer than two fingers was resolved
+        case .zooming, .swiping:
+            // Unreachable: a gesture needing more than one finger was resolved
             // above, before this switch. Stated rather than defaulted, so
             // adding a state cannot silently fall through here.
             return []
         }
+    }
+
+    /// Three fingers travelling together.
+    ///
+    /// Only upwards, and only once per gesture. Upwards is decreasing `y`:
+    /// these are screen coordinates, where the origin is the top.
+    private mutating func swipe(_ contacts: [TouchPoint]) -> [InputAction] {
+        let middle = contacts.reduce(CGPoint.zero) { sum, contact in
+            CGPoint(x: sum.x + contact.position.x, y: sum.y + contact.position.y)
+        }
+        let centre = CGPoint(
+            x: middle.x / CGFloat(contacts.count),
+            y: middle.y / CGFloat(contacts.count)
+        )
+
+        guard case .swiping(let origin, let fired) = state else {
+            state = .swiping(origin: centre, fired: false)
+            return []
+        }
+        guard !fired else { return [] }
+
+        let travelled = origin.y - centre.y
+        guard travelled >= configuration.swipeThreshold else { return [] }
+
+        state = .swiping(origin: origin, fired: true)
+        return [.showAllWindows]
     }
 
     /// Spread or close two fingers, in whole zoom steps.
@@ -228,9 +270,9 @@ struct TouchscreenRecognizer: GestureRecognizer {
         // the panel was unplugged.
         case .scrolling:
             return finishing(with: .scrollEnd)
-        case .zooming:
-            // Nothing is held down by a zoom, but the pointer was moved for it.
-            return finishing(with: nil)
+        case .zooming, .swiping:
+            // Neither holds a button down; there is nothing to release.
+            return []
         case .idle, .possibleTap, .abandoned:
             return []
         }
