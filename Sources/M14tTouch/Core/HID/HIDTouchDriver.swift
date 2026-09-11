@@ -506,8 +506,23 @@ final class HIDTouchDriver {
 
     private func displayConfigurationChanged() {
         queue.async { [weak self] in
-            guard let self,
-                  let resolved = DisplayResolver.resolve(self.config.display)
+            guard let self else { return }
+
+            // A wake arrives before the displays do. `start()` finds nothing to
+            // map touches onto, gives up — correctly, there is no screen — and
+            // nothing was ever coming back to try again, so the driver stayed
+            // dead until someone pressed Reconnect. This is that retry.
+            //
+            // Waiting to be told rather than waiting a guessed number of
+            // seconds: the displays announce their own return, and they took
+            // one second on one wake and five on another.
+            if self.manager == nil, !self.isSuspended {
+                self.log("🖥️  Display configuration changed — trying to start")
+                self.start()
+                return
+            }
+
+            guard let resolved = DisplayResolver.resolve(self.config.display)
             else { return }
 
             let display = resolved.display
