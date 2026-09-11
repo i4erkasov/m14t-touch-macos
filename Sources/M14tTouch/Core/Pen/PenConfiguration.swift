@@ -111,6 +111,12 @@ struct PenConfiguration: Equatable, Codable {
     /// A hand resting on the screen to write with is the case this exists for.
     /// Only new contacts are ignored — a finger already down when the pen
     /// arrives keeps its gesture rather than having it cut in half.
+    ///
+    /// Verified on the panel: three pen sessions with a hand resting throughout
+    /// produced no finger actions at all, and 351 once the pen was away. And it
+    /// is the only palm rejection available — the panel's `Confidence` flag
+    /// looks like a hardware judgement of fingertip versus palm and is not one,
+    /// it merely follows contact (`docs/M14t_PEN_CAPABILITIES.md`).
     var palmRejection: Bool = true
 
     /// The button furthest from the tip.

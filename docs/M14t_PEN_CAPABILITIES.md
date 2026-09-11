@@ -236,6 +236,25 @@ that portrait does work, that is one minute's checking: rotate, touch the four
 corners, and see whether they land where they were touched. A swapped 90°/270°
 is the one plausible error left, and it is two lines to correct.
 
+## Palm rejection works, and the panel does not help with it
+
+Written during the pen work and never tested on hardware until now. A traced
+run settles both halves of it.
+
+**It works.** Three pen sessions with a hand resting on the panel throughout
+produced **zero** finger actions while the pen was in range. The same run
+produced 351 finger actions once the pen was away, so nothing was broken in the
+process — touches are suppressed while the pen is near and not otherwise.
+
+**The panel is no help.** `Confidence` (0x47) looked like the hardware's own
+judgement of whether a contact is a fingertip, and was recorded as such. It is
+not: traced through a deliberate palm test, it simply follows contact — 1 when
+something lands, 0 when it lifts, and never 0 while something is touching. Not
+one of five contacts was flagged, the palm included. So the driver's own rule —
+ignore a touch that *begins* while the pen is near, for the whole life of that
+touch — is the only palm rejection there is, and replacing it with the
+hardware's opinion is not an option that exists.
+
 ## The pen can stop transmitting, and the stylus is the likeliest culprit
 
 Observed over an afternoon of repeated driver restarts. The pen stopped

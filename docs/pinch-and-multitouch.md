@@ -47,9 +47,18 @@ Two details matter for whoever implements this:
   fingers are down has to be inferred from which contact IDs are currently
   reporting `TipSwitch = 1`, not read.
 
-There is also `Confidence` (0x47), which the panel sets to 0 or 1 — the
-hardware's own opinion of whether a contact is a real fingertip. That is palm
-rejection available for free, and better informed than ours.
+There is also `Confidence` (0x47), which the panel sets to 0 or 1.
+
+**Not what it looks like.** This was recorded here as "the hardware's own
+opinion of whether a contact is a real fingertip — palm rejection for free, and
+better informed than ours". That was a guess, and it is wrong. Traced during a
+deliberate palm test — a hand resting on the panel while writing — `Confidence`
+simply follows contact: 1 when a finger lands, 0 when it lifts, and **never 0
+while something is touching**. Not one contact out of five was flagged, palm
+included. The panel does not tell a palm from a fingertip.
+
+The driver honours the flag anyway, since honouring it costs nothing and a
+panel that did report it would then be believed.
 
 The driver used to overwrite one pair of coordinates from every contact, so two
 fingers behaved like one jittering finger. It now keys them by the `Finger`
