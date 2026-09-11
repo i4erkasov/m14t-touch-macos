@@ -233,6 +233,20 @@ private struct TouchSettings: View {
                 }
 
                 Section {
+                    Toggle("Spread two fingers to zoom", isOn: gestures.pinchToZoom)
+                    if model.settings.gestures.pinchToZoom {
+                        Stepper(
+                            "One step per \(Int(model.settings.gestures.zoomStep)) px",
+                            value: gestures.zoomStep, in: 10...200, step: 5
+                        )
+                    }
+                } header: {
+                    Text("Zoom")
+                } footer: {
+                    Text("Sends ⌘ and a scroll, which browsers, Preview, Photos and Finder read as zoom. A true pinch cannot be sent by any app without private APIs, so applications that only understand a real one will not respond.")
+                }
+
+                Section {
                     Stepper(
                         "Hold for \(Int(model.settings.gestures.longPressDelay * 1000)) ms",
                         value: gestures.longPressDelay, in: 0.1...2, step: 0.05

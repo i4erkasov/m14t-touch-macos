@@ -79,6 +79,22 @@ struct GestureConfiguration: Equatable, Codable {
     /// arrow parked on a touchscreen does not.
     var restoreCursor: Bool = true
 
+    /// Spread two fingers to zoom.
+    ///
+    /// On by default now that the panel is known to report five contacts. What
+    /// it sends is ⌘ + scroll rather than a true magnification, which every
+    /// browser, Preview, Photos and Finder understand — and some applications
+    /// do not.
+    var pinchToZoom: Bool = true
+
+    /// How much the fingers must separate, in panel-mapped points, for one
+    /// zoom step.
+    ///
+    /// Quantised deliberately. ⌘ + scroll is a stepped gesture in the
+    /// applications that receive it, so sending a step per pixel of movement
+    /// would zoom from minimum to maximum in one flick.
+    var zoomStep: Double = 40
+
     /// When to hide the system pointer — the spec amendment's "Cursor during
     /// touch" setting.
     ///
@@ -131,6 +147,8 @@ extension GestureConfiguration {
         scrollSensitivity = value(.scrollSensitivity, fallback.scrollSensitivity)
         naturalScroll = value(.naturalScroll, fallback.naturalScroll)
         restoreCursor = value(.restoreCursor, fallback.restoreCursor)
+        pinchToZoom = value(.pinchToZoom, fallback.pinchToZoom)
+        zoomStep = value(.zoomStep, fallback.zoomStep)
         cursorHiding = value(.cursorHiding, fallback.cursorHiding)
         longPressDelay = value(.longPressDelay, fallback.longPressDelay)
         dragThreshold = value(.dragThreshold, fallback.dragThreshold)

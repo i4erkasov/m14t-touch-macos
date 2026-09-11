@@ -30,6 +30,15 @@ enum InputAction: Equatable, Sendable {
     /// Not produced in v0.1 (spec §7.2, §23).
     case scroll(deltaX: CGFloat, deltaY: CGFloat)
 
+    /// Zoom by whole steps, positive to zoom in.
+    ///
+    /// Steps rather than a continuous scale, because what carries this is
+    /// ⌘ + scroll: a real `.magnify` event cannot be built with public APIs
+    /// (`docs/pinch-and-multitouch.md`), and the substitute is discrete by
+    /// nature. Quantising in the recognizer keeps the decision — how much
+    /// spreading is worth one step — where it can be tested.
+    case zoom(steps: Int)
+
     /// The scrolling gesture is over — the finger has lifted.
     ///
     /// A separate action because macOS distinguishes a scroll *gesture* from a

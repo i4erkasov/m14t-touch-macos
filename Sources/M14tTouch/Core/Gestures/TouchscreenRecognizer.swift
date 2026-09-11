@@ -30,6 +30,10 @@ struct TouchscreenRecognizer: GestureRecognizer {
         /// measured from.
         case scrolling(lastPosition: CGPoint)
 
+        /// Two fingers are spreading or closing. Carries the distance the last
+        /// step was measured from, and the fraction of a step left over.
+        case zooming(distance: CGFloat, carried: Double)
+
         /// The contact did something this configuration does not recognise, and
         /// nothing more will come of it until the finger lifts.
         case abandoned
@@ -43,6 +47,21 @@ struct TouchscreenRecognizer: GestureRecognizer {
 
     mutating func process(_ frame: TouchFrame) -> [InputAction] {
         guard let contact = frame.primaryContact else { return [] }
+
+        // Two fingers first, whatever the one-finger state machine was doing.
+        // A second finger landing means the user has changed their mind about
+        // what this gesture is, and the most recent statement wins.
+        let touching = frame.contacts.filter(\.isTouching)
+        if configuration.pinchToZoom, touching.count >= 2 {
+            return pinch(touching)
+        }
+        if case .zooming = state {
+            // Down to one finger. The zoom is over, and the survivor must not
+            // inherit it as a scroll — the user is lifting off, not starting
+            // something.
+            state = contact.isTouching ? .abandoned : .idle
+            return finishing(with: nil)
+        }
 
         switch state {
 
@@ -140,7 +159,53 @@ struct TouchscreenRecognizer: GestureRecognizer {
         case .abandoned:
             if !contact.isTouching { state = .idle }
             return []
+
+        case .zooming:
+            // Unreachable: a zoom with fewer than two fingers was resolved
+            // above, before this switch. Stated rather than defaulted, so
+            // adding a state cannot silently fall through here.
+            return []
         }
+    }
+
+    /// Spread or close two fingers, in whole zoom steps.
+    ///
+    /// Only the distance between the fingers is read. Where they are, and
+    /// whether the pair is also drifting across the panel, is deliberately
+    /// ignored: a pinch that also pans would need a true magnification event to
+    /// express, and there is no public way to send one.
+    private mutating func pinch(_ contacts: [TouchPoint]) -> [InputAction] {
+        let first = contacts[0].position
+        let second = contacts[1].position
+        let distance = hypot(second.x - first.x, second.y - first.y)
+
+        guard case .zooming(let previous, let carried) = state else {
+            state = .zooming(distance: distance, carried: 0)
+            // A zoom has no destination of its own, exactly like a scroll: it
+            // goes wherever the pointer is. So the pointer is put between the
+            // fingers once, at the start, and left alone after that.
+            return [.pointerMove(position: CGPoint(
+                x: (first.x + second.x) / 2,
+                y: (first.y + second.y) / 2
+            ))]
+        }
+
+        let moved = Double(distance - previous) + carried
+        let steps = Int((moved / configuration.zoomStep).rounded(.towardZero))
+
+        // Below a whole step, the movement is kept rather than discarded, so a
+        // slow spread still arrives — the same reasoning as the scroll
+        // accumulator, and the same failure without it: nothing happens at all.
+        guard steps != 0 else {
+            state = .zooming(distance: distance, carried: moved)
+            return []
+        }
+
+        state = .zooming(
+            distance: distance,
+            carried: moved - Double(steps) * configuration.zoomStep
+        )
+        return [.zoom(steps: steps)]
     }
 
     /// Close out a gesture, adding the cursor restore when it is switched on.
@@ -165,6 +230,9 @@ struct TouchscreenRecognizer: GestureRecognizer {
         // the panel was unplugged.
         case .scrolling:
             return finishing(with: .scrollEnd)
+        case .zooming:
+            // Nothing is held down by a zoom, but the pointer was moved for it.
+            return finishing(with: nil)
         case .idle, .possibleTap, .abandoned:
             return []
         }

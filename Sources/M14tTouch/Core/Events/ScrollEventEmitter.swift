@@ -31,6 +31,11 @@ final class ScrollEventEmitter: EventEmitter {
             return
         }
 
+        if case .zoom(let steps) = action {
+            postZoom(steps: steps)
+            return
+        }
+
         guard case .scroll(let deltaX, let deltaY) = action else { return }
 
         guard let wheel = accumulator.take(
@@ -39,6 +44,36 @@ final class ScrollEventEmitter: EventEmitter {
         ) else { return }
 
         post(vertical: wheel.vertical, horizontal: wheel.horizontal, phase: phases.delta())
+    }
+
+    /// Zoom, as ⌘ + scroll.
+    ///
+    /// A real magnification event cannot be built with public APIs
+    /// (`docs/pinch-and-multitouch.md`), and this is what applications accept
+    /// instead. Line units rather than pixels, and one line per step: this is
+    /// the same thing a mouse wheel with Command held sends, which is precisely
+    /// the input every application already knows how to zoom for.
+    ///
+    /// No phases either. A phased gesture is what a trackpad sends for
+    /// *scrolling*; for zoom the applications that respond are responding to a
+    /// wheel, and giving it a scroll phase makes some of them ignore it.
+    private func postZoom(steps: Int) {
+        guard steps != 0 else { return }
+        guard let event = CGEvent(
+            scrollWheelEvent2Source: nil,
+            units: .line,
+            wheelCount: 1,
+            wheel1: Int32(steps),
+            wheel2: 0,
+            wheel3: 0
+        ) else {
+            FileHandle.standardError.write(
+                Data("⚠️  Zoom CGEvent creation failed — is Accessibility permission granted?\n".utf8)
+            )
+            return
+        }
+        event.flags = .maskCommand
+        event.post(tap: .cghidEventTap)
     }
 
     /// One scroll event, carrying the phase that makes macOS treat it as a
