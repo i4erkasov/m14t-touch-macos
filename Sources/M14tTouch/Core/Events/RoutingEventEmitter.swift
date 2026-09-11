@@ -29,7 +29,7 @@ struct RoutingEventEmitter: EventEmitter {
             focus.emit(action)
         case .zoom:
             keyboard.emit(action)
-        case .scroll, .scrollEnd:
+        case .scroll, .scrollEnd, .scrollMomentum:
             scroll.emit(action)
         case .tap, .pointerMove, .dragBegin, .dragMove, .dragEnd, .rightClick, .cursorRestore:
             mouse.emit(action)

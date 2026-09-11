@@ -226,10 +226,11 @@ private struct TouchSettings: View {
                         "Starts after \(Int(model.settings.gestures.scrollThreshold)) px",
                         value: gestures.scrollThreshold, in: 1...60, step: 1
                     )
+                    Toggle("Keep going after you lift", isOn: gestures.scrollMomentum)
                 } header: {
                     Text("Scrolling")
                 } footer: {
-                    Text("Natural scrolling moves the content with your finger.")
+                    Text("Natural scrolling moves the content with your finger. Flicking and letting go carries on and slows to a stop, the way a trackpad does — macOS produces that itself for its own devices and not for this panel, so the app generates it.")
                 }
 
                 Section {

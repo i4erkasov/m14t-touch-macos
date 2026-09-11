@@ -21,7 +21,24 @@ final class ScrollEventEmitter: EventEmitter {
     private var accumulator = ScrollAccumulator()
     private var phases = ScrollPhaseTracker()
 
+    /// Where the glide after a flick is produced.
+    ///
+    /// A timer, because a glide is a thing that happens over time and no frame
+    /// arrives to drive it — the finger has gone. Its own queue, so it neither
+    /// waits on the touch pipeline nor holds it up.
+    private let glideQueue = DispatchQueue(label: "com.m14ttouch.momentum")
+    private var glide: DispatchSourceTimer?
+
     func emit(_ action: InputAction) {
+        if case .scrollMomentum(let velocity) = action {
+            startGlide(from: velocity)
+            return
+        }
+
+        // Any new movement of a finger ends the old glide. Touching the screen
+        // to stop a moving page is the gesture everyone already knows.
+        stopGlide()
+
         if case .scrollEnd = action {
             guard let phase = phases.end() else { return }
             // The remainder belongs to the gesture that just finished. Carrying
@@ -41,14 +58,55 @@ final class ScrollEventEmitter: EventEmitter {
         post(vertical: wheel.vertical, horizontal: wheel.horizontal, phase: phases.delta())
     }
 
+    /// Keep scrolling after the finger has gone, slowing to a stop.
+    private func startGlide(from velocity: CGVector) {
+        stopGlide()
+
+        var momentum = ScrollMomentum(velocity: velocity)
+        var phase = CGMomentumScrollPhase.begin
+        var carried = ScrollAccumulator()
+
+        let timer = DispatchSource.makeTimerSource(queue: glideQueue)
+        timer.schedule(deadline: .now() + momentum.interval, repeating: momentum.interval)
+        timer.setEventHandler { [self] in
+            guard let step = momentum.next() else {
+                // One last event to say it has stopped, or applications go on
+                // believing a glide is in progress.
+                post(vertical: 0, horizontal: 0, phase: nil, momentum: .end)
+                stopGlide()
+                return
+            }
+            guard let wheel = carried.take(x: Double(step.dx), y: Double(step.dy)) else { return }
+            post(vertical: wheel.vertical, horizontal: wheel.horizontal,
+                 phase: .none, momentum: phase)
+            phase = .continuous
+        }
+        timer.resume()
+        glide = timer
+    }
+
+    private func stopGlide() {
+        glide?.cancel()
+        glide = nil
+    }
+
     /// One scroll event, carrying the phase that makes macOS treat it as a
+    /// gesture rather than a wheel.    /// One scroll event, carrying the phase that makes macOS treat it as a
     /// gesture rather than a wheel.
     ///
     /// Without a phase — the default is `none` — pixel deltas are a mouse wheel:
     /// no rubber-banding at the end of a document, and no smooth continuous
     /// scrolling in the applications that distinguish the two. A trackpad sends
     /// `began`, then `changed`, then `ended`, and that is what this says.
-    private func post(vertical: Int32, horizontal: Int32, phase: CGScrollPhase) {
+    /// - Parameter phase: nil while a glide is running. `CGScrollPhase` has no
+    ///   case for "none", and the two phases are mutually exclusive: an event
+    ///   is part of a gesture or part of its momentum, never both.
+    private func post(
+        vertical: Int32,
+        horizontal: Int32,
+        phase: CGScrollPhase?,
+        momentum: CGMomentumScrollPhase = .none
+    ) {
         guard let event = CGEvent(
             scrollWheelEvent2Source: nil,
             units: .pixel,
@@ -64,7 +122,10 @@ final class ScrollEventEmitter: EventEmitter {
         }
 
         event.setIntegerValueField(
-            .scrollWheelEventScrollPhase, value: Int64(phase.rawValue)
+            .scrollWheelEventScrollPhase, value: Int64(phase?.rawValue ?? 0)
+        )
+        event.setIntegerValueField(
+            .scrollWheelEventMomentumPhase, value: Int64(momentum.rawValue)
         )
         // `isContinuous` is already 1 for pixel units — checked rather than set,
         // so nothing here claims to do something the constructor has done.

@@ -46,6 +46,14 @@ struct TouchscreenRecognizer: GestureRecognizer {
 
     private var state: State = .idle
 
+    /// How fast the finger is moving, in points per second, smoothed.
+    ///
+    /// Kept outside the state enum because it is a measurement rather than a
+    /// state — it is read once, when the finger lifts, to decide whether the
+    /// content should glide and how far.
+    private var scrollVelocity = CGVector.zero
+    private var lastScrollTime: TimeInterval = 0
+
     init(configuration: GestureConfiguration) {
         self.configuration = configuration
     }
@@ -128,6 +136,8 @@ struct TouchscreenRecognizer: GestureRecognizer {
                 // committed to the scroll is consumed by the commitment rather
                 // than scrolling the page by the threshold distance.
                 state = .scrolling(lastPosition: contact.position)
+                scrollVelocity = .zero
+                lastScrollTime = contact.timestamp
 
                 // A scroll event carries no destination — it goes wherever the
                 // cursor is. So the cursor has to be put on the target once, at
@@ -158,7 +168,15 @@ struct TouchscreenRecognizer: GestureRecognizer {
         case .scrolling(let lastPosition):
             guard contact.isTouching else {
                 state = .idle
-                return finishing(with: .scrollEnd)
+                var actions: [InputAction] = [.scrollEnd]
+                // The glide comes after the end, in that order, because that is
+                // the order a trackpad sends them and what applications expect.
+                let momentum = ScrollMomentum(velocity: releaseVelocity(at: contact.timestamp))
+                if configuration.scrollMomentum, momentum.isWorthGliding {
+                    actions.append(.scrollMomentum(velocity: momentum.velocity))
+                }
+                scrollVelocity = .zero
+                return finishing(with: actions)
             }
 
             // Note what is *not* here: the long-press deadline. That is the lock.
@@ -174,7 +192,9 @@ struct TouchscreenRecognizer: GestureRecognizer {
             // wheel direction be established on the device, not assumed here.
             let sign = configuration.naturalScroll ? 1.0 : -1.0
             let scale = configuration.scrollSensitivity * sign
-            return [.scroll(deltaX: deltaX * scale, deltaY: deltaY * scale)]
+            let scrolled = CGVector(dx: deltaX * scale, dy: deltaY * scale)
+            track(scrolled, at: contact.timestamp)
+            return [.scroll(deltaX: scrolled.dx, deltaY: scrolled.dy)]
 
         case .abandoned:
             if !contact.isTouching { state = .idle }
@@ -186,6 +206,44 @@ struct TouchscreenRecognizer: GestureRecognizer {
             // adding a state cannot silently fall through here.
             return []
         }
+    }
+
+    /// How long a finger may rest before what it was doing stops counting as a
+    /// flick.
+    ///
+    /// Frames in which nothing moved produce no delta and so never reach the
+    /// speed estimate, which would otherwise still hold whatever the finger was
+    /// doing before it stopped. Scrolling fast, resting a second, then lifting
+    /// would throw the page across the screen.
+    private static let flickExpiresAfter: TimeInterval = 0.08
+
+    /// The speed to glide at, or nothing if the finger had already stopped.
+    private func releaseVelocity(at timestamp: TimeInterval) -> CGVector {
+        guard timestamp - lastScrollTime <= Self.flickExpiresAfter else { return .zero }
+        return scrollVelocity
+    }
+
+    /// Fold one frame's movement into the speed estimate.    /// Fold one frame's movement into the speed estimate.
+    ///
+    /// Smoothed rather than taken from the last frame alone: at a hundred-odd
+    /// frames a second a single frame is a tiny, noisy sample, and the flick
+    /// that matters is the shape of the last several. Weighted towards the
+    /// newest, so a finger that stops dead before lifting does not throw the
+    /// page across the screen.
+    private mutating func track(_ movement: CGVector, at timestamp: TimeInterval) {
+        defer { lastScrollTime = timestamp }
+        let elapsed = timestamp - lastScrollTime
+        guard elapsed > 0 else { return }
+
+        let instant = CGVector(
+            dx: movement.dx / CGFloat(elapsed),
+            dy: movement.dy / CGFloat(elapsed)
+        )
+        let smoothing: CGFloat = 0.7
+        scrollVelocity = CGVector(
+            dx: scrollVelocity.dx * smoothing + instant.dx * (1 - smoothing),
+            dy: scrollVelocity.dy * smoothing + instant.dy * (1 - smoothing)
+        )
     }
 
     /// Whether this touch has been written off until every finger lifts.
@@ -267,7 +325,11 @@ struct TouchscreenRecognizer: GestureRecognizer {
     /// Always last, so the pointer goes home only after the click or release it
     /// was moved for has actually been posted.
     private func finishing(with action: InputAction?) -> [InputAction] {
-        var actions = action.map { [$0] } ?? []
+        finishing(with: action.map { [$0] } ?? [])
+    }
+
+    private func finishing(with actions: [InputAction]) -> [InputAction] {
+        var actions = actions
         if configuration.restoreCursor { actions.append(.cursorRestore) }
         return actions
     }

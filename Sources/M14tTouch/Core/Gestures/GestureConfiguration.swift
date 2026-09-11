@@ -108,6 +108,13 @@ struct GestureConfiguration: Equatable, Codable {
     /// How far three fingers must travel before the swipe counts, in points.
     var swipeThreshold: Double = 120
 
+    /// Keep scrolling after the finger lifts, slowing to a stop.
+    ///
+    /// What a trackpad does, and what the panel does not get for free: macOS
+    /// generates the glide for its own devices, and a driver in user space has
+    /// to produce it itself.
+    var scrollMomentum: Bool = true
+
     /// When to hide the system pointer — the spec amendment's "Cursor during
     /// touch" setting.
     ///
@@ -164,6 +171,7 @@ extension GestureConfiguration {
         zoomStep = value(.zoomStep, fallback.zoomStep)
         threeFingerSwipe = value(.threeFingerSwipe, fallback.threeFingerSwipe)
         swipeThreshold = value(.swipeThreshold, fallback.swipeThreshold)
+        scrollMomentum = value(.scrollMomentum, fallback.scrollMomentum)
         cursorHiding = value(.cursorHiding, fallback.cursorHiding)
         longPressDelay = value(.longPressDelay, fallback.longPressDelay)
         dragThreshold = value(.dragThreshold, fallback.dragThreshold)

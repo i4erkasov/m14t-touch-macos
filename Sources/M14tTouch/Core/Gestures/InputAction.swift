@@ -56,6 +56,13 @@ enum InputAction: Equatable, Sendable {
     /// spreading is worth one step — where it can be tested.
     case zoom(steps: Int)
 
+    /// Keep scrolling after the finger has gone, at this speed.
+    ///
+    /// In points per second, at the moment of release. macOS produces this
+    /// itself for a trackpad and cannot for a panel driven from user space, so
+    /// the deceleration is generated here — see `ScrollMomentum`.
+    case scrollMomentum(velocity: CGVector)
+
     /// The scrolling gesture is over — the finger has lifted.
     ///
     /// A separate action because macOS distinguishes a scroll *gesture* from a

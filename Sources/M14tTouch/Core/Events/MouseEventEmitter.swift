@@ -56,8 +56,8 @@ final class MouseEventEmitter: EventEmitter {
         case .dragEnd(let position):    return [(.leftMouseUp, position)]
         case .tap(let position):        return [(.leftMouseDown, position), (.leftMouseUp, position)]
         case .pointerMove(let position): return [(.mouseMoved, position)]
-        case .rightClick, .scroll, .scrollEnd, .zoom, .showAllWindows, .focusWindow,
-             .cursorRestore:
+        case .rightClick, .scroll, .scrollEnd, .scrollMomentum, .zoom, .showAllWindows,
+             .focusWindow, .cursorRestore:
             return []
         }
     }

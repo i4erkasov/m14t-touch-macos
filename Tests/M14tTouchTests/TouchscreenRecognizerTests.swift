@@ -103,7 +103,10 @@ final class TouchscreenRecognizerTests: XCTestCase {
         _ = recognizer.process(frame(100, 100, touching: true, at: 0))
         _ = recognizer.process(frame(200, 100, touching: true, at: 0.05))
         _ = recognizer.process(frame(100, 100, touching: true, at: 0.1))
-        XCTAssertEqual(recognizer.process(frame(100, 100, touching: false, at: 0.15)), [.scrollEnd])
+        // It lifts while still travelling, so the content glides after it.
+        let actions = recognizer.process(frame(100, 100, touching: false, at: 0.15))
+        XCTAssertEqual(actions.first, .scrollEnd)
+        XCTAssertEqual(actions.count, 2, "expected a glide to follow: \(actions)")
     }
 
     // MARK: - Time claims the contact
