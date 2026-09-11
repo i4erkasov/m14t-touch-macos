@@ -203,6 +203,36 @@ held during contact is a real eraser to the hardware and cannot be presented as
 one to applications. It stays what `PenTouchAction` already offers — nothing, or
 an ordinary stroke.
 
+## Portrait is spoiled by the monitor, not by macOS
+
+The driver follows `CGDisplayRotation` and re-aims itself when a display is
+rotated while it is running. Verified on the panel: setting 90° in System
+Settings produced
+
+    Display changed: 1080×1920 @ (-1920,0), rotation 90°
+
+in the log, with no restart, and the mapping swapped with it. That part works.
+
+What does not work is the monitor. Physically turned into portrait, it fits the
+picture into a band across the middle of the glass with black bars above and
+below, each about a third of the height — and it keeps doing that when macOS is
+rendering a correct 1080×1920 desktop for it. The scaling is internal to the
+monitor's firmware; macOS reports a full-size rotated framebuffer and has no
+idea the panel is showing it letterboxed.
+
+So touch in portrait cannot be made correct from here. The driver would have to
+know the letterbox geometry, and nothing reports it. If the monitor's own on-
+screen menu offers a scaling mode ("fill" rather than "fit") or a way to turn
+its rotation handling off, portrait becomes usable; otherwise it is not, and the
+reason is the hardware.
+
+**Still unverified:** which way round the quarter turns go. The mapping is
+derived and unit tested — corner by corner, plus the properties that catch a
+reversed sign — but it has never been confirmed against a rotated panel,
+because this panel cannot show a rotated picture worth touching. If a display
+that rotates properly is ever available, touch the corners: 90° and 270° being
+swapped is the one plausible error, and it is two lines to correct.
+
 ## The pen can stop transmitting, and the stylus is the likeliest culprit
 
 Observed over an afternoon of repeated driver restarts. The pen stopped
