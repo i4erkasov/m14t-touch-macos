@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// What a pen button does (pen spec §24).
@@ -12,12 +13,86 @@ enum PenButtonMapping: String, CaseIterable, Codable {
     case rightClick
     case middleClick
 
+    // Keystrokes. Sent once, when the button goes down: a shortcut is an
+    // instant, not something one holds.
+    case undo
+    case redo
+    case copy
+    case paste
+    case deleteKey
+    case escape
+
+    // Modifiers. Held for as long as the button is, and carried on the pen's
+    // own events rather than pressed for real — which is what makes them useful
+    // while drawing (a straight line, an eyedropper) without leaving a window
+    // in which the user's next keystroke becomes a shortcut.
+    case holdShift
+    case holdOption
+    case holdCommand
+    case holdControl
+
     var title: String {
         switch self {
         case .none:        return "Nothing"
         case .leftClick:   return "Primary click"
         case .rightClick:  return "Secondary click"
         case .middleClick: return "Middle click"
+        case .undo:        return "Undo (⌘Z)"
+        case .redo:        return "Redo (⇧⌘Z)"
+        case .copy:        return "Copy (⌘C)"
+        case .paste:       return "Paste (⌘V)"
+        case .deleteKey:   return "Delete"
+        case .escape:      return "Escape"
+        case .holdShift:   return "Hold ⇧"
+        case .holdOption:  return "Hold ⌥"
+        case .holdCommand: return "Hold ⌘"
+        case .holdControl: return "Hold ⌃"
+        }
+    }
+
+    /// The keystroke this sends once, if it is one.
+    var keystroke: (key: KeyboardPoster.Key, flags: CGEventFlags)? {
+        switch self {
+        case .undo:      return (.z, .maskCommand)
+        case .redo:      return (.z, [.maskCommand, .maskShift])
+        case .copy:      return (.c, .maskCommand)
+        case .paste:     return (.v, .maskCommand)
+        case .deleteKey: return (.delete, [])
+        case .escape:    return (.escape, [])
+        default:         return nil
+        }
+    }
+
+    /// The modifier this holds while the button is down, if it is one.
+    ///
+    /// Carried on the pen's events rather than pressed: a real ⌘ held for the
+    /// length of a stroke would turn whatever else the user typed into a
+    /// shortcut, and a real ⇧ would type capitals into whatever had focus.
+    var heldModifier: CGEventFlags? {
+        switch self {
+        case .holdShift:   return .maskShift
+        case .holdOption:  return .maskAlternate
+        case .holdCommand: return .maskCommand
+        case .holdControl: return .maskControl
+        default:           return nil
+        }
+    }
+
+    /// The three kinds, in the order a menu should offer them.
+    ///
+    /// Grouped because fourteen choices in one flat list is a list nobody
+    /// reads, and the three behave differently enough that the grouping is a
+    /// real distinction rather than tidiness.
+    static let clicks: [PenButtonMapping] = [.none, .leftClick, .rightClick, .middleClick]
+    static let shortcuts: [PenButtonMapping] = [.undo, .redo, .copy, .paste, .deleteKey, .escape]
+    static let modifiers: [PenButtonMapping] = [.holdShift, .holdOption, .holdCommand, .holdControl]
+
+    /// Whether this is a mouse button, which is the only kind that is held down
+    /// and released as a pair.
+    var isClick: Bool {
+        switch self {
+        case .leftClick, .rightClick, .middleClick: return true
+        default: return false
         }
     }
 }

@@ -52,6 +52,12 @@ final class PenMouseBackend: PenEventBackend {
     /// something would fire a secondary click on the way.
     private var nearButtonUsedForContact = false
 
+    /// Modifiers held by a pen button mapped to one, carried on every event
+    /// this backend sends for as long as the button is down.
+    private var heldModifiers: CGEventFlags = []
+
+    private let keyboard = KeyboardPoster()
+
     init(configuration: PenConfiguration = PenConfiguration()) {
         self.configuration = configuration
     }
@@ -63,6 +69,7 @@ final class PenMouseBackend: PenEventBackend {
             release(self.configuration.farButton, at: lastPosition)
         }
         heldButtons = []
+        heldModifiers = []
         nearButtonUsedForContact = false
         self.configuration = configuration
 
@@ -116,19 +123,60 @@ final class PenMouseBackend: PenEventBackend {
         let nearIsHeld = buttons.contains(.eraserMode)
         heldButtons = buttons
 
-        if farIsHeld, !farWasHeld { press(configuration.farButton, at: position) }
-        if farWasHeld, !farIsHeld { release(configuration.farButton, at: position) }
+        // Modifiers first, so that anything they modify is already carrying them.
+        updateModifiers(far: farIsHeld, near: nearIsHeld)
+
+        if farIsHeld, !farWasHeld { begin(configuration.farButton, at: position) }
+        if farWasHeld, !farIsHeld { end(configuration.farButton, at: position) }
 
         if nearIsHeld, !nearWasHeld { nearButtonUsedForContact = false }
         if nearWasHeld, !nearIsHeld {
             // Released. If nothing was touched while it was held, it was a press
             // of a button rather than a choice of tool.
             if !nearButtonUsedForContact {
-                press(configuration.nearButtonHover, at: position)
-                release(configuration.nearButtonHover, at: position)
+                fireOnce(configuration.nearButtonHover, at: position)
             }
             nearButtonUsedForContact = false
         }
+    }
+
+    /// A button going down.
+    ///
+    /// A mouse button presses and stays pressed; a shortcut is an instant and
+    /// fires here; a modifier is already in force and has nothing to do.
+    private func begin(_ mapping: PenButtonMapping, at position: CGPoint) {
+        if mapping.isClick {
+            press(mapping, at: position)
+        } else if let keystroke = mapping.keystroke {
+            keyboard.press(keystroke.key, flags: keystroke.flags)
+        }
+    }
+
+    /// A button coming up. Only a held mouse button has anything to release.
+    private func end(_ mapping: PenButtonMapping, at position: CGPoint) {
+        if mapping.isClick { release(mapping, at: position) }
+    }
+
+    /// The near button's action, which happens on release rather than on press
+    /// — so a click is a press and a release together, and a shortcut is one.
+    private func fireOnce(_ mapping: PenButtonMapping, at position: CGPoint) {
+        if mapping.isClick {
+            press(mapping, at: position)
+            release(mapping, at: position)
+        } else if let keystroke = mapping.keystroke {
+            keyboard.press(keystroke.key, flags: keystroke.flags)
+        }
+    }
+
+    /// Which modifiers the buttons are currently holding.
+    ///
+    /// Recomputed from the buttons rather than toggled, so a mapping changed
+    /// mid-press cannot leave a modifier stuck on with nothing left to clear it.
+    private func updateModifiers(far: Bool, near: Bool) {
+        var flags: CGEventFlags = []
+        if far, let modifier = configuration.farButton.heldModifier { flags.insert(modifier) }
+        if near, let modifier = configuration.nearButtonHover.heldModifier { flags.insert(modifier) }
+        heldModifiers = flags
     }
 
     private func emit(_ action: PenAction) {
@@ -147,7 +195,7 @@ final class PenMouseBackend: PenEventBackend {
     /// not go through `emit`, and they displace it just the same.
     private func post(_ type: CGEventType, at point: CGPoint, pressure: Double? = nil) {
         parking.rememberIfNeeded()
-        poster.post(type, at: point, pressure: pressure)
+        poster.post(type, at: point, pressure: pressure, flags: heldModifiers)
     }
 
     // MARK: - Mapping
@@ -220,28 +268,34 @@ final class PenMouseBackend: PenEventBackend {
     /// holds the button — which is what a context menu expects.
     static func down(_ mapping: PenButtonMapping) -> CGEventType? {
         switch mapping {
-        case .none:        return nil
         case .leftClick:   return .leftMouseDown
         case .rightClick:  return .rightMouseDown
         case .middleClick: return .otherMouseDown
+        // Keystrokes and held modifiers are not mouse buttons and have no
+        // event of this kind; they are carried out elsewhere.
+        default:           return nil
         }
     }
 
     static func up(_ mapping: PenButtonMapping) -> CGEventType? {
         switch mapping {
-        case .none:        return nil
         case .leftClick:   return .leftMouseUp
         case .rightClick:  return .rightMouseUp
         case .middleClick: return .otherMouseUp
+        // Keystrokes and held modifiers are not mouse buttons and have no
+        // event of this kind; they are carried out elsewhere.
+        default:           return nil
         }
     }
 
     static func dragged(_ mapping: PenButtonMapping) -> CGEventType? {
         switch mapping {
-        case .none:        return nil
         case .leftClick:   return .leftMouseDragged
         case .rightClick:  return .rightMouseDragged
         case .middleClick: return .otherMouseDragged
+        // Keystrokes and held modifiers are not mouse buttons and have no
+        // event of this kind; they are carried out elsewhere.
+        default:           return nil
         }
     }
 

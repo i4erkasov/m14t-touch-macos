@@ -19,7 +19,15 @@ struct CGEventPoster {
     ///   marked as a tablet point arrives at an application with its pressure
     ///   intact, where a plain mouse event only ever carries 1 or 0
     ///   (`docs/M14t_PEN_CAPABILITIES.md`).
-    func post(_ type: CGEventType, at point: CGPoint, pressure: Double? = nil) {
+    /// - Parameter flags: modifiers to carry on the event, for a pen button
+    ///   being held as one. Carried rather than pressed, so that holding a
+    ///   button does not turn the user's own next keystroke into a shortcut.
+    func post(
+        _ type: CGEventType,
+        at point: CGPoint,
+        pressure: Double? = nil,
+        flags: CGEventFlags = []
+    ) {
         guard let event = CGEvent(
             mouseEventSource: nil,
             mouseType: type,
@@ -38,6 +46,7 @@ struct CGEventPoster {
             event.setDoubleValueField(.mouseEventPressure, value: pressure)
             event.setDoubleValueField(.tabletEventPointPressure, value: pressure)
         }
+        if !flags.isEmpty { event.flags = flags }
         event.post(tap: .cghidEventTap)
     }
 }

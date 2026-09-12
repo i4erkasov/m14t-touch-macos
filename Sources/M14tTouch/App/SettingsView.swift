@@ -330,6 +330,23 @@ private struct PenSettings: View {
 
     private var pen: Binding<PenConfiguration> { $model.settings.pen }
 
+    /// What a pen button can be set to, in three groups.
+    ///
+    /// Built once and used by both buttons: the two offer the same choices, and
+    /// a list written twice is a list that will differ.
+    @ViewBuilder
+    private var buttonChoices: some View {
+        Section {
+            ForEach(PenButtonMapping.clicks, id: \.self) { Text($0.title).tag($0) }
+        }
+        Section("Shortcut") {
+            ForEach(PenButtonMapping.shortcuts, id: \.self) { Text($0.title).tag($0) }
+        }
+        Section("Hold") {
+            ForEach(PenButtonMapping.modifiers, id: \.self) { Text($0.title).tag($0) }
+        }
+    }
+
     /// The stored colour as the colour well wants it.
     ///
     /// A bridge rather than a stored `Color`, because a preferences file cannot
@@ -356,7 +373,7 @@ private struct PenSettings: View {
             if model.settings.penEnabled {
                 Section {
                     Picker("Hover action", selection: pen.nearButtonHover) {
-                        ForEach(PenButtonMapping.allCases, id: \.self) { Text($0.title).tag($0) }
+                        buttonChoices
                     }
                     Picker("Touch action", selection: pen.nearButtonTouch) {
                         ForEach(PenTouchAction.allCases, id: \.self) { Text($0.title).tag($0) }
@@ -371,12 +388,12 @@ private struct PenSettings: View {
 
                 Section {
                     Picker("Action", selection: pen.farButton) {
-                        ForEach(PenButtonMapping.allCases, id: \.self) { Text($0.title).tag($0) }
+                        buttonChoices
                     }
                 } header: {
                     Text("Far button")
                 } footer: {
-                    Text("Both buttons work while hovering, without touching the screen.")
+                    Text("Both buttons work while hovering, without touching the screen. A shortcut fires once when the button goes down; a modifier is held for as long as the button is, and rides on the pen's own events — so holding ⇧ draws a straight line in an application that does that, without typing capitals into anything else.")
                 }
 
                 Section {
