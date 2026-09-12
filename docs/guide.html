@@ -13,6 +13,8 @@
 <meta property="og:url" content="https://i4erkasov.github.io/m14t-touch-macos/guide.html">
 <meta property="og:image" content="https://i4erkasov.github.io/m14t-touch-macos/images/share.png">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -59,6 +61,12 @@
   <dd>Registers the app with macOS so it starts when you log in. It appears only
       in the installed app, and macOS may ask you to approve it under Login
       Items.</dd>
+
+  <dt>About</dt>
+  <dd>Which version this is, and whether a newer one has been released. The
+      check asks GitHub when the pane is opened or the button is pressed, and
+      never on a timer — it is the only request this app makes. A build made
+      after a release is not told to install the release it grew from.</dd>
 </dl>
 
 <h2 id="touch">Touch</h2>
@@ -77,6 +85,13 @@
   <dt>Tap to click, One-finger scroll, Long press to drag</dt>
   <dd>Each gesture separately. Turning one off does not disturb the others: a
       touch that cannot become a scroll simply stays a tap.</dd>
+
+  <dt>Hold and tap for secondary click</dt>
+  <dd>Rest one finger on something and tap with a second: a context menu, at the
+      <em>first</em> finger. The first says where, the second says when. Fingers
+      that move apart instead are a pinch, and nothing is decided until one of
+      those rules the other out — so neither gesture fires on the way into the
+      other.</dd>
 
   <dt>Natural scrolling</dt>
   <dd>The content follows your finger, as on a phone. Off, it goes the other
@@ -149,9 +164,11 @@
 
   <dt>Pointer</dt>
   <dd><strong>Dot</strong> draws a small coloured ring where the pen is and
-      hides the system arrow, which suits direct touch. The dot's middle stays
-      dark so it can be seen on a pale window; the ring carries the colour you
-      choose. <strong>System arrow</strong> leaves the pointer alone.</dd>
+      hides the system arrow, which suits direct touch. <strong>Crosshair</strong>
+      draws four arms around an empty centre instead — the centre being empty is
+      the point, since a dot covers whatever it is aimed at. Both carry dark
+      edges so they can be seen on a pale window and the colour you choose on a
+      dark one. <strong>System arrow</strong> leaves the pointer alone.</dd>
 
   <dt>Return the pointer when the pen leaves</dt>
   <dd>Reaching the panel takes the pointer there, because a click carries its
@@ -217,6 +234,13 @@
       coordinates <em>before</em> calibration, where they land on screen, and
       pressure raw and scaled. Panel coordinates are the useful ones when a
       touch lands in the wrong place.</dd>
+
+  <dt>Show where the panel sees your fingers</dt>
+  <dd>A circle at every contact the panel reports — including ones being ignored
+      on purpose, so a touch rejected as a palm still gets one. "My touch is
+      being rejected" and "my touch is not being seen" look identical when
+      nothing happens; this is what tells them apart. Not remembered between
+      launches.</dd>
 
   <dt>Log pen actions to the system log</dt>
   <dd>Records every action the pen produces, so a problem can be read back
