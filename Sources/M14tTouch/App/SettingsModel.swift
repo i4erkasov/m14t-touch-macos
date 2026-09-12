@@ -203,6 +203,51 @@ final class SettingsModel: ObservableObject {
         status.failure ?? (status.isConnected ? displayName : "Not connected")
     }
 
+    // MARK: - Version
+
+    /// What this build calls itself, or nil when it is not a bundle — the
+    /// command-line build has no Info.plist to ask.
+    var version: String? {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+    }
+
+    @Published private(set) var update: UpdateCheckerOutcome = .idle
+    @Published private(set) var isCheckingForUpdate = false
+
+    enum UpdateCheckerOutcome: Equatable {
+        case idle
+        case upToDate
+        case available(version: String, url: String)
+        case failed(reason: String)
+    }
+
+    /// Ask GitHub whether there is anything newer.
+    ///
+    /// Only when asked, and never on a timer: this is the app's one outbound
+    /// request, and it should happen because somebody opened this pane, not
+    /// because time passed.
+    func checkForUpdate() {
+        guard !isCheckingForUpdate else { return }
+        isCheckingForUpdate = true
+
+        let current = version
+        Task { [weak self] in
+            let outcome = await UpdateChecker().check(current: current)
+            await MainActor.run {
+                guard let self else { return }
+                self.isCheckingForUpdate = false
+                switch outcome {
+                case .upToDate:
+                    self.update = .upToDate
+                case .updateAvailable(let latest, let url):
+                    self.update = .available(version: latest, url: url)
+                case .unknown(let reason):
+                    self.update = .failed(reason: reason)
+                }
+            }
+        }
+    }
+
     func isGranted(_ permission: Permission) -> Bool { permissions[permission] ?? false }
 
     func grant(_ permission: Permission) {

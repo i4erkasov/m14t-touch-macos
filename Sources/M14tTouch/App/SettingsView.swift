@@ -164,8 +164,41 @@ private struct GeneralSettings: View {
             } footer: {
                 Text("Granted to this app specifically, not to the project.")
             }
+
+            if let version = model.version {
+                Section {
+                    LabeledContent("Version", value: version)
+                    LabeledContent {
+                        switch model.update {
+                        case _ where model.isCheckingForUpdate:
+                            ProgressView().controlSize(.small)
+                        case .idle:
+                            EmptyView()
+                        case .upToDate:
+                            Label("Up to date", systemImage: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                                .labelStyle(.titleAndIcon)
+                                .imageScale(.small)
+                        case .available(let latest, let url):
+                            Link("\(latest) is available", destination: URL(string: url)!)
+                        case .failed(let reason):
+                            Text(reason).foregroundStyle(.secondary)
+                        }
+                    } label: {
+                        Button("Check for updates") { model.checkForUpdate() }
+                            .disabled(model.isCheckingForUpdate)
+                    }
+                } header: {
+                    Text("About")
+                } footer: {
+                    Text("Checking asks GitHub for the latest release. Nothing is sent and nothing happens on a timer — only when this pane is opened or the button is pressed.")
+                }
+            }
         }
         .formStyle(.grouped)
+        // Once, when the pane appears. A version that says nothing until a
+        // button is found is a version nobody checks.
+        .onAppear { if model.update == .idle { model.checkForUpdate() } }
     }
 
     private var displaySelection: Binding<Int> {
