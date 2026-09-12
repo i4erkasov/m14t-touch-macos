@@ -45,10 +45,14 @@ final class MouseEventEmitterTests: XCTestCase {
     }
 
     // Unhandled on purpose: scroll belongs to ScrollEventEmitter and is routed
-    // there, and rightClick waits for two-finger gestures (spec §11).
-    func testScrollAndRightClickAreNotThisEmittersBusiness() {
+    // there.
+    //
+    // This test used to say the same of `rightClick`, on the grounds that it
+    // "waits for two-finger gestures". When those arrived, nothing came back to
+    // this line, and a passing test then stood guard over the very gap that
+    // made the new gesture do nothing.
+    func testScrollIsNotThisEmittersBusiness() {
         XCTAssertTrue(MouseEventEmitter.mouseEvents(for: .scroll(deltaX: 1, deltaY: 2)).isEmpty)
-        XCTAssertTrue(MouseEventEmitter.mouseEvents(for: .rightClick(position: point)).isEmpty)
     }
 
     func testRecordingEmitterKeepsActionsInOrder() {
@@ -61,5 +65,43 @@ final class MouseEventEmitterTests: XCTestCase {
             .dragMove(position: point),
             .dragEnd(position: point),
         ])
+    }
+
+    // The gap this fills: a recognizer emitted `.rightClick` and the emitter
+    // turned it into nothing at all, so holding a finger and tapping with a
+    // second did exactly what not implementing it would have done. It was
+    // listed among the actions this emitter deliberately ignores, which is also
+    // why `reportUnsupported` never complained.
+    func testASecondaryClickIsAPressAndReleaseOfTheRightButton() {
+        let point = CGPoint(x: 120, y: 340)
+        let events = MouseEventEmitter.mouseEvents(for: .rightClick(position: point))
+
+        XCTAssertEqual(events.map(\.type), [.rightMouseDown, .rightMouseUp])
+        XCTAssertEqual(events.map(\.point), [point, point])
+    }
+
+    // Everything a recognizer can emit is either turned into events here or
+    // deliberately handled elsewhere. Nothing may simply vanish.
+    func testNoActionIsSilentlyDropped() {
+        let point = CGPoint(x: 1, y: 2)
+        let handledElsewhere: [InputAction] = [
+            .scroll(deltaX: 0, deltaY: 1), .scrollEnd,
+            .scrollMomentum(velocity: .zero, restoresCursor: false),
+            .zoom(steps: 1), .showAllWindows, .focusWindow(position: point),
+            .cursorRestore
+        ]
+        let mine: [InputAction] = [
+            .tap(position: point), .pointerMove(position: point),
+            .dragBegin(position: point), .dragMove(position: point),
+            .dragEnd(position: point), .rightClick(position: point)
+        ]
+        for action in mine {
+            XCTAssertFalse(MouseEventEmitter.mouseEvents(for: action).isEmpty,
+                           "\(action) produces no events")
+        }
+        for action in handledElsewhere {
+            XCTAssertTrue(MouseEventEmitter.mouseEvents(for: action).isEmpty,
+                          "\(action) belongs to another emitter")
+        }
     }
 }

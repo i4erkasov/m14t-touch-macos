@@ -56,7 +56,15 @@ final class MouseEventEmitter: EventEmitter {
         case .dragEnd(let position):    return [(.leftMouseUp, position)]
         case .tap(let position):        return [(.leftMouseDown, position), (.leftMouseUp, position)]
         case .pointerMove(let position): return [(.mouseMoved, position)]
-        case .rightClick, .scroll, .scrollEnd, .scrollMomentum, .zoom, .showAllWindows,
+        // Down and up at one point, like a tap. Listed here rather than left in
+        // the group below, which is where it sat unimplemented while a
+        // recognizer emitted it: an action named in that list is dropped in
+        // silence, and the whole point of `reportUnsupported` is that nothing
+        // should be.
+        case .rightClick(let position):
+            return [(.rightMouseDown, position), (.rightMouseUp, position)]
+
+        case .scroll, .scrollEnd, .scrollMomentum, .zoom, .showAllWindows,
              .focusWindow, .cursorRestore:
             return []
         }
