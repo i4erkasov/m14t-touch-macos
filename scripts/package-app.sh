@@ -15,7 +15,10 @@ APP_NAME="M14t Touch"
 BUNDLE_ID="com.m14ttouch.app"   # must match ArgumentParser.appBundleIdentifier
 DESTINATION="build/${APP_NAME}.app"
 
-VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo "0.3.0-dev")"
+# One place decides what a version is called, in both of its forms.
+. "$(dirname "$0")/version.sh"
+VERSION_TAG="$(version_tag)"
+VERSION="$(version_bundle "$VERSION_TAG")"
 
 # A release goes to other people's Macs, which are not all Apple Silicon, so it
 # is built for both architectures. A debug build is for this machine and is
@@ -100,7 +103,15 @@ else
     echo "  macOS asking for Input Monitoring again after every rebuild."
 fi
 
-printf '\033[32mBuilt %s\033[0m\n' "$DESTINATION"
+# The bundle is the artifact; check the artifact. A release goes to other
+# people's Macs and to a Homebrew cask that states the same version, so a
+# mismatch here is caught before it is published rather than after.
+if ! assert_bundle_version "$DESTINATION" "$VERSION"; then
+    echo "   (built from $VERSION_TAG)" >&2
+    exit 1
+fi
+
+printf '\033[32mBuilt %s\033[0m  (version %s)\n' "$DESTINATION" "$VERSION"
 echo
 echo "  Run it:      open \"$DESTINATION\""
 echo "  Install it:  cp -R \"$DESTINATION\" ~/Applications/"
