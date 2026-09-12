@@ -236,6 +236,27 @@ that portrait does work, that is one minute's checking: rotate, touch the four
 corners, and see whether they land where they were touched. A swapped 90°/270°
 is the one plausible error left, and it is two lines to correct.
 
+## `BatteryStrength` is not a battery
+
+The digitizer page's `BatteryStrength` (0x3B) arrives from this panel, and it
+does not hold a charge. It reads **255 whenever the pen is in range and 0 the
+moment it is taken away** — proximity, wearing a battery's name.
+
+Found the way it should have been found before it was believed: it was briefly
+shown in the menu as a percentage, and the first person to wave the stylus saw
+it swing between 100% and 0%. A gauge that reads full for a nearly-flat stylus
+causes precisely the failure it was added to prevent — and that failure is real
+on this hardware, since a dying stylus stops transmitting with no warning and
+looks exactly like a broken driver.
+
+So nothing shows it. The value is still parsed and carried in `PenSample`,
+where it is harmless, with a comment saying why nobody may present it.
+
+**This is the second usage on this panel whose name promised more than it
+delivered**, after `Confidence`, which merely follows contact. The rule earned
+twice over: on this device, read what a usage *does* before believing what it
+is called.
+
 ## Palm rejection works, and the panel does not help with it
 
 Written during the pen work and never tested on hardware until now. A traced

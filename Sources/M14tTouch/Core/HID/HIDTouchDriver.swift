@@ -943,14 +943,16 @@ final class HIDTouchDriver {
         case (HID.Page.digitizer.rawValue, HID.Digitizer.tipSwitch.rawValue):   penTipDown = raw != 0
         case (HID.Page.digitizer.rawValue, HID.Digitizer.eraser.rawValue):      penEraserDown = raw != 0
         case (HID.Page.digitizer.rawValue, HID.Digitizer.tipPressure.rawValue): penPressureRaw = raw
+        // Read, carried in the sample, and shown to nobody.
+        //
+        // The usage is `BatteryStrength` and does not hold one: on this panel
+        // it reads full whenever the pen is near and empty the moment it is
+        // taken away, which is proximity wearing a battery's name. It was
+        // briefly presented as a charge, and a gauge that reads 100% for a
+        // nearly-flat stylus causes exactly the failure it was added to
+        // prevent. See docs/M14t_PEN_CAPABILITIES.md.
         case (HID.Page.digitizer.rawValue, HID.Digitizer.batteryStrength.rawValue):
             penBattery = raw / 255
-            // Published only when it changes. The panel repeats this value
-            // steadily, and a status that changed at the panel's rate would
-            // redraw the menu a hundred times a second to say the same thing.
-            if status.batteryLevel != penBattery {
-                status.batteryLevel = penBattery
-            }
         case (HID.Page.digitizer.rawValue, HID.Digitizer.barrelSwitch.rawValue):
             penButtons = raw != 0 ? penButtons.union(.barrel) : penButtons.subtracting(.barrel)
         case (HID.Page.digitizer.rawValue, HID.Digitizer.invert.rawValue):
