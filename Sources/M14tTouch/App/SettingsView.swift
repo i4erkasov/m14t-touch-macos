@@ -530,14 +530,13 @@ private struct DiagnosticsSettings: View {
                 LabeledContent("Tilt", value: "Not reported")
                 LabeledContent("Buttons", value: "Two, both work while hovering")
                 LabeledContent("Eraser", value: "The near button, in hardware")
-                LabeledContent("Battery", value: "Follows proximity, not charge")
             } header: {
                 Text("Stylus")
             } footer: {
                 // What the panel does was measured, not read off a datasheet;
                 // a live view of the HID stream is a later piece of work and is
                 // not implied here.
-                Text("What this panel does and does not do, established by testing it rather than read from a datasheet. The stylus sends a value named for a battery that is full whenever the pen is near and empty when it is away, so there is no charge to show. See docs/M14t_PEN_CAPABILITIES.md.")
+                Text("What this panel does and does not do, established by testing it rather than read from a datasheet. See docs/M14t_PEN_CAPABILITIES.md.")
             }
 
             Section {
