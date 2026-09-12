@@ -945,6 +945,12 @@ final class HIDTouchDriver {
         case (HID.Page.digitizer.rawValue, HID.Digitizer.tipPressure.rawValue): penPressureRaw = raw
         case (HID.Page.digitizer.rawValue, HID.Digitizer.batteryStrength.rawValue):
             penBattery = raw / 255
+            // Published only when it changes. The panel repeats this value
+            // steadily, and a status that changed at the panel's rate would
+            // redraw the menu a hundred times a second to say the same thing.
+            if status.batteryLevel != penBattery {
+                status.batteryLevel = penBattery
+            }
         case (HID.Page.digitizer.rawValue, HID.Digitizer.barrelSwitch.rawValue):
             penButtons = raw != 0 ? penButtons.union(.barrel) : penButtons.subtracting(.barrel)
         case (HID.Page.digitizer.rawValue, HID.Digitizer.invert.rawValue):

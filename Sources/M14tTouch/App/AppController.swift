@@ -318,6 +318,8 @@ extension AppController: NSMenuDelegate {
         enable.state = settings.enabled ? .on : .off
         menu.addItem(enable)
 
+        if let battery = batteryItem() { menu.addItem(battery) }
+
         // Mode moved to the settings window. A menu is for the handful of things
         // wanted mid-task, and choosing a gesture model is not one of them.
         menu.addItem(.separator())
@@ -343,7 +345,32 @@ extension AppController: NSMenuDelegate {
         ))
     }
 
-    /// The connection line, with a green dot when there is something to be
+    /// The stylus's charge, once it has said what it is.
+    ///
+    /// Shown in the menu rather than only in diagnostics because of how this
+    /// hardware fails: the stylus stops transmitting with no warning, which
+    /// looks exactly like a broken driver. An afternoon went into that once,
+    /// and a line saying "12%" would have ended it in seconds.
+    private func batteryItem() -> NSMenuItem? {
+        guard let percentage = status.batteryPercentage,
+              let symbol = status.batterySymbol
+        else { return nil }
+
+        let item = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        item.isEnabled = true
+        item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+
+        let text = NSMutableAttributedString(string: "Stylus  \(percentage)%")
+        text.addAttribute(
+            .foregroundColor,
+            value: status.isBatteryLow ? NSColor.systemOrange : NSColor.secondaryLabelColor,
+            range: NSRange(location: 0, length: text.length)
+        )
+        item.attributedTitle = text
+        return item
+    }
+
+    /// The connection line, with a green dot when there is something to be    /// The connection line, with a green dot when there is something to be
     /// connected to.
     ///
     /// Enabled but without an action rather than disabled: macOS greys a

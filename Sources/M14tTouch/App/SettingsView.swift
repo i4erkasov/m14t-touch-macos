@@ -526,6 +526,16 @@ private struct DiagnosticsSettings: View {
             }
 
             Section {
+                LabeledContent("Battery") {
+                    if let percentage = model.status.batteryPercentage,
+                       let symbol = model.status.batterySymbol {
+                        Label("\(percentage)%", systemImage: symbol)
+                            .labelStyle(.titleAndIcon)
+                            .foregroundStyle(model.status.isBatteryLow ? .orange : .primary)
+                    } else {
+                        Text("Not reported yet").foregroundStyle(.secondary)
+                    }
+                }
                 LabeledContent("Pressure", value: "Reported, 0–4095")
                 LabeledContent("Tilt", value: "Not reported")
                 LabeledContent("Buttons", value: "Two, both work while hovering")
@@ -536,7 +546,7 @@ private struct DiagnosticsSettings: View {
                 // What the panel does was measured, not read off a datasheet;
                 // a live view of the HID stream is a later piece of work and is
                 // not implied here.
-                Text("Established by testing this panel. See docs/M14t_PEN_CAPABILITIES.md.")
+                Text("The battery is the stylus's own and appears once it has reported — a pen that has not been used since this app started has not said. Everything else was established by testing this panel; see docs/M14t_PEN_CAPABILITIES.md.")
             }
 
             Section {
