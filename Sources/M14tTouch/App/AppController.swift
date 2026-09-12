@@ -86,6 +86,13 @@ final class AppController: NSObject, NSApplicationDelegate {
             object: nil
         )
 
+        // If the app has moved since it was made a login item — installed to
+        // /Applications by Homebrew after having been copied to ~/Applications,
+        // say — the registration followed the old bundle and is now pointing
+        // wherever that went. Put it back on this one, without asking the user
+        // to switch a toggle off and on to repair something they never broke.
+        LoginItem.reconcile()
+
         // Ask before starting, not after failing. Without Input Monitoring the
         // HID manager refuses to open and the app can only sit there saying it
         // is not connected; the prompt appears once per application, so this is

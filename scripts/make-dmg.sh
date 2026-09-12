@@ -18,8 +18,17 @@ cd "$(dirname "$0")/.."
 
 APP_NAME="M14t Touch"
 VOLUME_NAME="M14t Touch"
-VERSION="$(git describe --tags --always 2>/dev/null || echo "0.4.0")"
+# The image is named after the tag, "v" included: that name is what the
+# GitHub release serves and what the Homebrew cask's url interpolates. The
+# bundle inside carries the other form — see scripts/version.sh.
+. "$(dirname "$0")/version.sh"
+VERSION="$(version_tag)"
 DMG="build/M14t-Touch-${VERSION}.dmg"
+
+if ! version_is_release "$VERSION"; then
+    echo "  ⚠️  $VERSION is not a clean tag — this image is a test build, and"
+    echo "     its name will not match what a cask expects. Tag first to publish."
+fi
 
 ./scripts/package-app.sh release
 
