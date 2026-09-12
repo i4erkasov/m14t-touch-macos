@@ -4,20 +4,18 @@ import XCTest
 /// Covers persistence and, more importantly, what happens to a stored value
 /// written by an older version. Getting that wrong resets everything the user
 /// configured, silently, on upgrade.
-final class SettingsTests: XCTestCase {
+final class SettingsTests: TemporaryDefaultsTestCase {
 
-    private var suiteName: String!
-    private var defaults: UserDefaults!
     private var store: SettingsStore!
 
     override func setUpWithError() throws {
-        suiteName = "m14t-tests-\(UUID().uuidString)"
-        defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        try super.setUpWithError()
         store = SettingsStore(defaults: defaults)
     }
 
     override func tearDownWithError() throws {
-        defaults.removePersistentDomain(forName: suiteName)
+        store = nil
+        try super.tearDownWithError()
     }
 
     private func makeSettings() -> AppSettings {
