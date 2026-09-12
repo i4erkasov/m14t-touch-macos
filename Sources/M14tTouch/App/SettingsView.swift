@@ -215,6 +215,7 @@ private struct TouchSettings: View {
                     Toggle("Tap to click", isOn: gestures.tapEnabled)
                     Toggle("One-finger scroll", isOn: gestures.oneFingerScrollEnabled)
                     Toggle("Long press to drag", isOn: gestures.longPressDragEnabled)
+                    Toggle("Hold and tap for secondary click", isOn: gestures.twoFingerSecondaryClick)
                 }
 
                 Section {

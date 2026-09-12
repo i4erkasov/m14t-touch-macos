@@ -30,6 +30,19 @@ struct TouchscreenRecognizer: GestureRecognizer {
         /// measured from.
         case scrolling(lastPosition: CGPoint)
 
+        /// A second finger has landed while the first was resting, and it is
+        /// not yet clear whether it is a tap — meaning a secondary click — or
+        /// the beginning of a pinch. Carries where the *first* finger is, since
+        /// that is where a click would go; when the second arrived; how far
+        /// apart they started; and whether the first finger had already become
+        /// a drag, whose button has to be let go before anything else.
+        case secondaryPending(
+            anchor: CGPoint,
+            arrivedAt: TimeInterval,
+            separation: CGFloat,
+            wasDragging: Bool
+        )
+
         /// Two fingers are spreading or closing. Carries the distance the last
         /// step was measured from, and the fraction of a step left over.
         case zooming(distance: CGFloat, carried: Double)
@@ -80,8 +93,27 @@ struct TouchscreenRecognizer: GestureRecognizer {
         // nothing more will come of it until every finger is off. Without the
         // guard, lifting from three fingers to two started a zoom on the very
         // next frame — the survivors inheriting a gesture the user had ended.
-        if configuration.pinchToZoom, touching.count >= 2, !isAbandoned {
-            return pinch(touching)
+        if touching.count >= 2, !isAbandoned {
+            return twoFingers(touching, at: frame.timestamp)
+        }
+        // Down to one finger with a second-finger tap still undecided: it
+        // either was one, or it was nothing.
+        if case .secondaryPending(let anchor, let arrivedAt, _, let wasDragging) = state {
+            state = contact.isTouching ? .abandoned : .idle
+            let lifted = frame.timestamp - arrivedAt
+            guard configuration.twoFingerSecondaryClick,
+                  lifted <= configuration.longPressDelay
+            else {
+                // Not a tap. Whatever it was, let go of anything held.
+                return wasDragging ? [.dragEnd(position: anchor)] : []
+            }
+            var actions: [InputAction] = []
+            // The first finger may have been holding a button down for long
+            // enough to have become a drag; it has to be released before a
+            // secondary click, or the two press at once.
+            if wasDragging { actions.append(.dragEnd(position: anchor)) }
+            actions.append(.rightClick(position: anchor))
+            return finishing(with: actions)
         }
         if case .zooming = state {
             // Down to one finger. The zoom is over, and the survivor must not
@@ -211,7 +243,7 @@ struct TouchscreenRecognizer: GestureRecognizer {
             if !contact.isTouching { state = .idle }
             return []
 
-        case .zooming, .swiping:
+        case .zooming, .swiping, .secondaryPending:
             // Unreachable: a gesture needing more than one finger was resolved
             // above, before this switch. Stated rather than defaulted, so
             // adding a state cannot silently fall through here.
@@ -289,7 +321,59 @@ struct TouchscreenRecognizer: GestureRecognizer {
         return [.showAllWindows]
     }
 
-    /// Spread or close two fingers, in whole zoom steps.
+    /// A second finger has arrived. Decide, or wait to decide, what it means.
+    ///
+    /// A tap with the second finger while the first rests on something is a
+    /// secondary click *at the first finger*; fingers that separate are a
+    /// pinch. Both begin identically, so the choice is deferred until one of
+    /// them rules the other out — by the second finger leaving quickly, or by
+    /// the pair moving apart.
+    private mutating func twoFingers(
+        _ contacts: [TouchPoint],
+        at timestamp: TimeInterval
+    ) -> [InputAction] {
+        let separation = hypot(
+            contacts[1].position.x - contacts[0].position.x,
+            contacts[1].position.y - contacts[0].position.y
+        )
+
+        switch state {
+        case .possibleTap(let origin, _) where configuration.twoFingerSecondaryClick:
+            state = .secondaryPending(
+                anchor: origin, arrivedAt: timestamp,
+                separation: separation, wasDragging: false
+            )
+            return []
+
+        case .dragging(let lastPosition) where configuration.twoFingerSecondaryClick:
+            state = .secondaryPending(
+                anchor: lastPosition, arrivedAt: timestamp,
+                separation: separation, wasDragging: true
+            )
+            return []
+
+        case .secondaryPending(let anchor, let arrivedAt, let started, let wasDragging):
+            // Moving apart settles it: this is a pinch, not a tap.
+            let moved = abs(separation - started) > configuration.scrollThreshold
+            let overstayed = timestamp - arrivedAt > configuration.longPressDelay
+            guard moved || overstayed else { return [] }
+
+            guard configuration.pinchToZoom else {
+                state = .abandoned
+                return wasDragging ? [.dragEnd(position: anchor)] : []
+            }
+            var actions: [InputAction] = wasDragging ? [.dragEnd(position: anchor)] : []
+            state = .idle          // so `pinch` opens the gesture properly
+            actions.append(contentsOf: pinch(contacts))
+            return actions
+
+        default:
+            guard configuration.pinchToZoom else { return [] }
+            return pinch(contacts)
+        }
+    }
+
+    /// Spread or close two fingers, in whole zoom steps.    /// Spread or close two fingers, in whole zoom steps.
     ///
     /// Only the distance between the fingers is read. Where they are, and
     /// whether the pair is also drifting across the panel, is deliberately
@@ -360,6 +444,9 @@ struct TouchscreenRecognizer: GestureRecognizer {
         case .zooming, .swiping:
             // Neither holds a button down; there is nothing to release.
             return []
+        case .secondaryPending(let anchor, _, _, let wasDragging):
+            // The first finger may still be holding a button down.
+            return wasDragging ? finishing(with: .dragEnd(position: anchor)) : []
         case .idle, .possibleTap, .abandoned:
             return []
         }

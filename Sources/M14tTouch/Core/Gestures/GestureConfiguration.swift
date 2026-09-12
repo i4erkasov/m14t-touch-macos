@@ -103,6 +103,20 @@ struct GestureConfiguration: Equatable, Codable {
     /// application windows, switching desktops — are system shortcuts, and
     /// system shortcuts do not answer synthesised keystrokes. Offering a swipe
     /// that silently did nothing would be worse than not offering it.
+    /// Hold one finger on something and tap with a second for a secondary
+    /// click.
+    ///
+    /// The tap lands where the *first* finger is, not where the second one
+    /// touched: the first finger is what the user is pointing at, and the
+    /// second is only the instruction. That is what makes this better suited to
+    /// a touchscreen than a trackpad's two-finger tap, which has no position of
+    /// its own to speak of.
+    ///
+    /// A second finger that stays longer than `longPressDelay`, or that moves
+    /// far enough to be spreading, is not a tap — it is a pinch, and is treated
+    /// as one.
+    var twoFingerSecondaryClick: Bool = true
+
     var threeFingerSwipe: Bool = true
 
     /// How far three fingers must travel before the swipe counts, in points.
@@ -169,6 +183,7 @@ extension GestureConfiguration {
         restoreCursor = value(.restoreCursor, fallback.restoreCursor)
         pinchToZoom = value(.pinchToZoom, fallback.pinchToZoom)
         zoomStep = value(.zoomStep, fallback.zoomStep)
+        twoFingerSecondaryClick = value(.twoFingerSecondaryClick, fallback.twoFingerSecondaryClick)
         threeFingerSwipe = value(.threeFingerSwipe, fallback.threeFingerSwipe)
         swipeThreshold = value(.swipeThreshold, fallback.swipeThreshold)
         scrollMomentum = value(.scrollMomentum, fallback.scrollMomentum)
