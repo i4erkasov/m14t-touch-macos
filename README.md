@@ -94,6 +94,26 @@ covered by `swift test` with no hardware.
 
 ## Quick start
 
+### With Homebrew
+
+```bash
+brew trust i4erkasov/m14t-touch
+brew install --cask i4erkasov/m14t-touch/m14t-touch
+```
+
+The first line is Homebrew 6 refusing to load a cask from a tap outside
+`Homebrew/*` until you say you trust it; it is answered once per tap, and it has
+to come first, because `brew tap` reads the cask as it taps and fails on an
+untrusted one. The install adds the tap itself. The cask
+installs the same signed universal build this repository releases, and clears
+the quarantine attribute that would otherwise stop an unnotarized app from
+opening at all — see [Sharing it with someone else](#sharing-it-with-someone-else)
+for what that attribute is and why notarization is the real fix. Permissions
+still have to be granted once, as below.
+
+The tap lives in
+[i4erkasov/homebrew-m14t-touch](https://github.com/i4erkasov/homebrew-m14t-touch).
+
 ### As an application
 
 ```bash
