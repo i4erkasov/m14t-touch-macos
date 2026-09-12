@@ -111,11 +111,27 @@ final class PenPointerTests: XCTestCase {
         XCTAssertEqual(green.alpha, 1)
     }
 
-    func testBothStylesAreOfferedAndNamed() {
-        XCTAssertEqual(PenPointerStyle.allCases.count, 2)
+    func testEveryStyleIsOfferedAndNamed() {
+        XCTAssertEqual(PenPointerStyle.allCases.count, 3)
         for style in PenPointerStyle.allCases {
             XCTAssertFalse(style.title.isEmpty)
         }
+    }
+
+    // The one thing that decides whether the overlay runs and the system arrow
+    // is hidden, so it is worth stating rather than inferring from a name.
+    func testOnlyTheSystemArrowIsNotDrawnByUs() {
+        XCTAssertFalse(PenPointerStyle.arrow.isDrawn)
+        XCTAssertTrue(PenPointerStyle.dot.isDrawn)
+        XCTAssertTrue(PenPointerStyle.crosshair.isDrawn)
+    }
+
+    func testACrosshairSurvivesASaveAndLoad() throws {
+        var configuration = PenConfiguration()
+        configuration.pointer = .crosshair
+        let data = try JSONEncoder().encode(configuration)
+        XCTAssertEqual(try JSONDecoder().decode(PenConfiguration.self, from: data).pointer,
+                       .crosshair)
     }
 }
 

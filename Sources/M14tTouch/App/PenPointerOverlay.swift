@@ -43,6 +43,7 @@ final class PenPointerOverlay: PenPointerDisplay {
     private var window: NSPanel?
     private var diameter: CGFloat = 14
     private var ringColor: RGBAColor = .systemGreen
+    private var style: PenPointerStyle = .arrow
     private var isShowing = false
     private var hasWarmed = false
 
@@ -52,7 +53,7 @@ final class PenPointerOverlay: PenPointerDisplay {
 
     /// Follow a change of settings. Main thread.
     func apply(_ configuration: PenConfiguration) {
-        let wanted = configuration.pointer == .dot
+        let wanted = configuration.pointer.isDrawn
         lock.lock()
         let changed = wanted != isEnabled
         isEnabled = wanted
@@ -60,6 +61,7 @@ final class PenPointerOverlay: PenPointerDisplay {
 
         diameter = CGFloat(configuration.pointerSize)
         ringColor = configuration.pointerColor
+        style = configuration.pointer
 
         // Built now rather than on the first pen sample. Measured: constructing
         // this window costs 28 ms and showing it for the first time another 3,
@@ -236,21 +238,71 @@ final class PenPointerOverlay: PenPointerDisplay {
     private func styleDot() {
         guard let layer = window?.contentView?.layer else { return }
         let side = diameter + Self.margin
-        let inset = Self.margin / 2
 
         layer.sublayers?.forEach { $0.removeFromSuperlayer() }
+        switch style {
+        case .dot, .arrow: layer.addSublayer(makeDot())
+        case .crosshair:   makeCrosshair().forEach(layer.addSublayer)
+        }
+
+        if let window, window.frame.width != side {
+            window.setContentSize(CGSize(width: side, height: side))
+        }
+    }
+
+    /// A filled disc inside a coloured ring.
+    ///
+    /// The core is a fixed dark rather than a semantic colour. A dynamic colour
+    /// resolves against this application's appearance, and this application is
+    /// not the one underneath — the pointer floats over whatever the pen is
+    /// pointing at, so it carries its own contrast: a dark core for pale
+    /// windows, a bright ring for dark ones. Only the ring is the user's to
+    /// choose, which is why the core is not.
+    private func makeDot() -> CALayer {
+        let inset = Self.margin / 2
         let dot = CALayer()
         dot.frame = CGRect(x: inset, y: inset, width: diameter, height: diameter)
         dot.cornerRadius = diameter / 2
         dot.backgroundColor = NSColor(white: 0.1, alpha: 0.85).cgColor
         dot.borderColor = ringColor.cgColor
-        // A tenth of the diameter is a hairline at any size worth using; a sixth
-        // is thick enough that the colour is what the pointer looks like.
+        // A tenth of the diameter is a hairline at any size worth using; a
+        // sixth is thick enough that the colour is what the pointer looks like.
         dot.borderWidth = max(1.5, diameter / 6)
-        layer.addSublayer(dot)
+        return dot
+    }
 
-        if let window, window.frame.width != side {
-            window.setContentSize(CGSize(width: side, height: side))
+    /// Four arms around an empty centre.
+    ///
+    /// Each arm is drawn twice — a dark bar and a coloured one a little thinner
+    /// on top — for the same reason the dot has a dark core and a bright ring:
+    /// one colour cannot be seen against every window, and this floats over
+    /// windows whose colour is not ours to know.
+    private func makeCrosshair() -> [CALayer] {
+        let centre = (diameter + Self.margin) / 2
+        let thickness = max(1.5, diameter / 7)
+        let outline = thickness + 2
+        let gap = diameter * 0.18
+        let arm = diameter / 2 - gap
+
+        // Horizontal pair, then vertical: left, right, down, up.
+        let arms: [CGRect] = [
+            CGRect(x: centre - gap - arm, y: centre - thickness / 2, width: arm, height: thickness),
+            CGRect(x: centre + gap, y: centre - thickness / 2, width: arm, height: thickness),
+            CGRect(x: centre - thickness / 2, y: centre - gap - arm, width: thickness, height: arm),
+            CGRect(x: centre - thickness / 2, y: centre + gap, width: thickness, height: arm)
+        ]
+
+        return arms.flatMap { rect -> [CALayer] in
+            let shadow = CALayer()
+            shadow.frame = rect.insetBy(dx: -(outline - thickness) / 2, dy: -(outline - thickness) / 2)
+            shadow.cornerRadius = min(shadow.frame.width, shadow.frame.height) / 2
+            shadow.backgroundColor = NSColor(white: 0.1, alpha: 0.8).cgColor
+
+            let bar = CALayer()
+            bar.frame = rect
+            bar.cornerRadius = min(rect.width, rect.height) / 2
+            bar.backgroundColor = ringColor.cgColor
+            return [shadow, bar]
         }
     }
 

@@ -351,8 +351,8 @@ private struct PenSettings: View {
                         ForEach(PenPointerStyle.allCases, id: \.self) { Text($0.title).tag($0) }
                     }
                     Toggle("Return the pointer when the pen leaves", isOn: pen.restoresPointerOnExit)
-                    if model.settings.pen.pointer == .dot {
-                        ColorPicker("Ring colour", selection: ringColor, supportsOpacity: false)
+                    if model.settings.pen.pointer.isDrawn {
+                        ColorPicker("Colour", selection: ringColor, supportsOpacity: false)
                         LabeledContent("Size") {
                             Slider(value: pen.pointerSize, in: 6...32, step: 1) {
                                 Text("Size")
@@ -367,8 +367,8 @@ private struct PenSettings: View {
                 } header: {
                     Text("Pointer")
                 } footer: {
-                    Text(model.settings.pen.pointer == .dot
-                         ? "The dot is drawn over everything and the system arrow is hidden while the pen is near. Its middle stays dark so it can be seen on a pale window; the ring carries the colour. Hiding the arrow needs the same facility as Touch → Cursor; where that is unavailable, both are visible."
+                    Text(model.settings.pen.pointer.isDrawn
+                         ? "Drawn over everything, with the system arrow hidden while the pen is near. Dark edges carry it over pale windows and the colour over dark ones. A crosshair leaves its centre empty, which suits aiming at something small. Hiding the arrow needs the same facility as Touch → Cursor; where that is unavailable, both are visible."
                          : "The pointer macOS would show anyway.")
                 }
 

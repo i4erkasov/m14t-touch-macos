@@ -15,12 +15,22 @@ enum PenPointerStyle: String, CaseIterable, Codable {
     /// facility the finger modes use.
     case dot
 
+    /// Four arms around an empty centre, drawn the same way.
+    ///
+    /// The gap is the point of it: a dot covers what it is pointing at, which
+    /// matters when the thing being aimed at is a few pixels wide.
+    case crosshair
+
     var title: String {
         switch self {
-        case .arrow: return "System arrow"
-        case .dot:   return "Dot"
+        case .arrow:     return "System arrow"
+        case .dot:       return "Dot"
+        case .crosshair: return "Crosshair"
         }
     }
+
+    /// Whether this style is drawn by the app rather than by macOS.
+    var isDrawn: Bool { self != .arrow }
 }
 
 /// Something that can draw a pointer where the pen is.
