@@ -118,6 +118,11 @@ final class HIDTouchDriver {
     /// nothing here notices. Read on the touch queue and written from the main
     /// thread, so it is set through the queue rather than assigned directly.
     private var penPointer: PenPointerDisplay?
+
+    /// Where the finger circles are drawn, when someone has asked to see them.
+    ///
+    /// Set by the application, like the pen's pointer, and nil everywhere else.
+    private var touchDisplay: TouchPointDisplay?
     /// What the panel is reporting right now, published for the diagnostics
     /// pane while it is being looked at and not otherwise.
     ///
@@ -484,6 +489,18 @@ final class HIDTouchDriver {
     /// one.
     func setPenPointer(_ pointer: PenPointerDisplay?) {
         queue.async { [weak self] in self?.penPointer = pointer }
+    }
+
+    /// Show or stop showing where the panel thinks fingers are, from any
+    /// thread. Nil takes the circles away.
+    func setTouchDisplay(_ display: TouchPointDisplay?) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            // Clear what is on screen before letting go of it, or the last
+            // circles drawn stay there with nobody left to remove them.
+            self.touchDisplay?.show([])
+            self.touchDisplay = display
+        }
     }
 
     /// Follow the display being rotated, moved or resized while running.
@@ -1048,6 +1065,9 @@ final class HIDTouchDriver {
         slots.removeAll()
         primarySlot = nil
         live.contactCount = 0
+        // Nothing is touching any more, and no frame is coming to say so: the
+        // circles would otherwise stay on screen with nobody left to move them.
+        touchDisplay?.show([])
     }
 
     /// The `Finger` collection an element belongs to, or nil if it is not in
@@ -1124,11 +1144,16 @@ final class HIDTouchDriver {
     }
 
     private func emitFrame() {
-        // A contact that began under the pen stays ignored for its whole life.
-        if suppressingFingerContact { return }
-
         let timestamp = ProcessInfo.processInfo.systemUptime
         var contacts = currentContacts(at: timestamp)
+
+        // Before the palm check, deliberately. The circles answer "does the
+        // panel see my finger, and where" — and a touch that is being ignored
+        // on purpose is exactly the case where that question gets asked.
+        touchDisplay?.show(contacts.map(\.position))
+
+        // A contact that began under the pen stays ignored for its whole life.
+        if suppressingFingerContact { return }
 
         // A frame with nothing on it still has to be delivered, and still has
         // to carry a point: the single-touch recognizers end a gesture by

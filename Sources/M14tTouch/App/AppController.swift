@@ -35,6 +35,9 @@ final class AppController: NSObject, NSApplicationDelegate {
     /// no application around it.
     private lazy var penPointer = PenPointerOverlay(cursorVisibility: cursorVisibility)
 
+    /// The diagnostic circles, built only if someone asks to see them.
+    private lazy var touchVisualizer = TouchVisualizerOverlay()
+
     init(
         driver: HIDTouchDriver,
         cursorVisibility: CursorVisibilityController,
@@ -242,6 +245,18 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
         model.setActionLogging = { [weak self] enabled in
             self?.driver.setActionLogging(enabled)
+        }
+        model.setTouchVisualizer = { [weak self] enabled in
+            guard let self else { return }
+            if enabled {
+                // Windows built before the first touch: one costs about 28 ms
+                // to create, and a gesture is the wrong moment to pay for five.
+                self.touchVisualizer.prepare()
+                self.driver.setTouchDisplay(self.touchVisualizer)
+            } else {
+                self.driver.setTouchDisplay(nil)
+                self.touchVisualizer.clear()
+            }
         }
         model.reconnect = { [weak self] completion in
             self?.driver.restart(completion: completion)

@@ -521,6 +521,14 @@ private struct DiagnosticsSettings: View {
             }
 
             Section {
+                Toggle("Show where the panel sees your fingers", isOn: $model.showsTouchPoints)
+            } header: {
+                Text("Touch points")
+            } footer: {
+                Text("Draws a circle at every contact the panel reports, including ones being ignored on purpose — a touch rejected as a palm still gets a circle. Answers whether the panel sees your finger and whether it thinks it is where you put it, which look identical when nothing happens.")
+            }
+
+            Section {
                 Toggle("Log pen actions to the system log", isOn: $model.logsInput)
             } header: {
                 Text("Logging")

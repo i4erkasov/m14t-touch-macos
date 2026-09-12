@@ -70,6 +70,18 @@ final class SettingsModel: ObservableObject {
     /// Narrate pen actions to the system log. Set by the controller.
     var setActionLogging: ((Bool) -> Void)?
 
+    /// Draw a circle wherever the panel says a finger is. Set by the controller.
+    var setTouchVisualizer: ((Bool) -> Void)?
+
+    /// Whether those circles are being drawn.
+    ///
+    /// Not persisted, like the log switch: it is something you turn on to look
+    /// at a problem, and circles left on for ever would be someone else's
+    /// problem tomorrow.
+    @Published var showsTouchPoints = false {
+        didSet { setTouchVisualizer?(showsTouchPoints) }
+    }
+
     /// Release the panel and take it again. Set by the controller.
     var reconnect: (((Bool) -> Void)?) -> Void = { _ in }
 
