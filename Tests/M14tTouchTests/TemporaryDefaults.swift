@@ -1,21 +1,38 @@
 import Foundation
 import XCTest
 
-/// A `UserDefaults` suite that leaves nothing behind.
+/// Defaults for tests that never reach the disk.
 ///
-/// Tests need a real suite rather than a dictionary, because what is being
-/// tested is what survives a round trip through the actual preferences system.
-/// The cost of that had been 650 empty plists in the runner's
-/// `~/Library/Preferences`: `removePersistentDomain` empties a domain but does
-/// not remove the file it was stored in, so every run of every test left one
-/// more 42-byte husk behind.
+/// The first attempt at fixing the litter kept a real suite and tried to delete
+/// its file afterwards. It does not work, and the reason is worth keeping:
+/// `cfprefsd` owns the write, not the test process. With the file removed at
+/// teardown, empty plists reappeared in `~/Library/Preferences` about a minute
+/// after `swift test` had finished — 28 of them in one run. Forcing a flush
+/// first brought that down to 7, which is the shape of a race, not of a fix.
 ///
-/// So cleaning up means three things, in order, and the last one is the one
-/// that was missing.
+/// So no file is created at all. `UserDefaults` is documented as subclassable
+/// through these three primitives, and everything else — `data(forKey:)`,
+/// `string(forKey:)` — is built on them, so a store that reads and writes
+/// `Data` is exercised exactly as it would be against the real thing.
+final class InMemoryDefaults: UserDefaults {
+
+    private var storage: [String: Any] = [:]
+
+    override func object(forKey defaultName: String) -> Any? { storage[defaultName] }
+
+    override func set(_ value: Any?, forKey defaultName: String) {
+        if let value { storage[defaultName] = value } else { storage[defaultName] = nil }
+    }
+
+    override func removeObject(forKey defaultName: String) { storage[defaultName] = nil }
+}
+
+/// Finding and removing preference files left by earlier versions of these
+/// tests — and by the one test below that still makes a real suite on purpose.
 enum TemporaryDefaults {
 
-    /// The prefix every suite this makes is named with — and the pattern the
-    /// sweeper matches. One constant, so a rename cannot leave the sweeper
+    /// The prefix every suite these tests make is named with, and the pattern
+    /// the sweeper matches. One constant, so a rename cannot leave the sweeper
     /// looking for files nothing creates any more.
     static let prefix = "m14t-tests-"
 
@@ -27,78 +44,66 @@ enum TemporaryDefaults {
         directory.appendingPathComponent("\(suiteName).plist")
     }
 
-    /// A suite name nothing else is using.
     static func makeSuiteName() -> String { "\(prefix)\(UUID().uuidString)" }
 
-    /// Empty the domain, detach the suite, and delete the file.
-    ///
-    /// Idempotent, and safe to call for a suite that was never written to.
+    /// Empty the domain, flush it, detach it, delete the file. All four, in that
+    /// order — and still not a guarantee, which is why nothing routine uses it.
     static func remove(suiteName: String) {
         let defaults = UserDefaults(suiteName: suiteName)
         defaults?.removePersistentDomain(forName: suiteName)
+        defaults?.synchronize()
+        CFPreferencesAppSynchronize(suiteName as CFString)
         UserDefaults.standard.removeSuite(named: suiteName)
-        // cfprefsd may have the file open; removing it while empty is still the
-        // only thing that makes the directory the same afterwards as before.
         try? FileManager.default.removeItem(at: fileURL(for: suiteName))
     }
 
-    /// Delete any suite left by an earlier run that could not clean up after
-    /// itself — a crashed process, or a test killed mid-run. Only files matching
-    /// this project's own prefix are touched.
-    ///
     /// Whether a file in the preferences directory is one of ours to delete.
     ///
     /// A separate, pure decision so it can be tested against the names of files
     /// that must never be touched. Everything in that directory belongs to some
-    /// other application, and a sweeper with a loose predicate is worse than
-    /// the litter it clears.
+    /// other application, and a sweeper with a loose predicate is worse than the
+    /// litter it clears.
     static func isOurLeftover(fileName: String) -> Bool {
         fileName.hasPrefix(prefix) && fileName.hasSuffix(".plist")
     }
 
-    /// - Returns: how many were removed.
+    /// Clear anything an earlier run left behind. Runs once per test bundle.
     @discardableResult
     static func sweepLeftovers() -> Int {
         let manager = FileManager.default
         guard let names = try? manager.contentsOfDirectory(atPath: directory.path) else { return 0 }
         var removed = 0
         for name in names where isOurLeftover(fileName: name) {
-            let suiteName = String(name.dropLast(".plist".count))
-            remove(suiteName: suiteName)
+            remove(suiteName: String(name.dropLast(".plist".count)))
             if !manager.fileExists(atPath: directory.appendingPathComponent(name).path) {
                 removed += 1
             }
         }
         return removed
     }
+
+    private static var hasSwept = false
+
+    static func sweepOnce() {
+        guard !hasSwept else { return }
+        hasSwept = true
+        sweepLeftovers()
+    }
 }
 
-/// A test case that gets a throwaway suite and is guaranteed to give it back.
-///
-/// `tearDown` runs after a failing test as well as a passing one, which is the
-/// case that matters: the litter accumulated while the suite was green, but it
-/// would have accumulated faster while it was not.
+/// A test case with defaults of its own that cost nothing to clean up.
 class TemporaryDefaultsTestCase: XCTestCase {
 
-    private(set) var suiteName: String!
     private(set) var defaults: UserDefaults!
 
     override func setUpWithError() throws {
         try super.setUpWithError()
-        suiteName = TemporaryDefaults.makeSuiteName()
-        defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-
-        // Registered as well as done in tearDown, so that a failure thrown by a
-        // subclass's own setUp — after this one has already made a suite — does
-        // not skip the cleanup.
-        let name = suiteName!
-        addTeardownBlock { TemporaryDefaults.remove(suiteName: name) }
+        TemporaryDefaults.sweepOnce()
+        defaults = InMemoryDefaults()
     }
 
     override func tearDownWithError() throws {
-        if let suiteName { TemporaryDefaults.remove(suiteName: suiteName) }
         defaults = nil
-        suiteName = nil
         try super.tearDownWithError()
     }
 }
