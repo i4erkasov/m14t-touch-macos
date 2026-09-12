@@ -2,21 +2,28 @@
 #
 # Not the release itself: that is still `./scripts/make-dmg.sh` on a Mac, and it
 # has to be. The DMG is signed with an identity that lives in a local keychain,
-# so a runner rebuilding it would produce a different signature — and macOS keys
-# Input Monitoring and Accessibility to the signature, meaning every user would
-# have to grant both permissions again on every release. CI cannot do that part
-# without a Developer ID certificate to sign with.
+# and macOS keys Input Monitoring and Accessibility to that signature — a runner
+# rebuilding the app would produce a different one, and every user would have to
+# grant both permissions again on every release.
 #
-# What CI can own is everything downstream of the published asset. Today that is
-# the Homebrew cask: read the version, fetch the DMG GitHub is actually serving,
-# checksum it, and open a pull request against the tap. The checksum is never
-# copied from a local build, which is the point — it describes the file users
-# will download, not the one that happened to be on the developer's disk.
+# What CI can own is everything downstream of the published asset: read the
+# version, fetch the DMG GitHub is actually serving, checksum that, and open a
+# pull request against the Homebrew tap. The work is in scripts/update-cask.sh
+# so it can be run and debugged on a Mac rather than only by pushing tags.
 #
-# Requires a secret, TAP_TOKEN: a fine-grained personal access token with
-# Contents: read and write and Pull requests: read and write on
-# i4erkasov/homebrew-m14t-touch. The built-in GITHUB_TOKEN cannot reach another
-# repository.
+# ── The secret this needs ────────────────────────────────────────────────────
+# Name:        TAP_TOKEN
+# Kind:        fine-grained personal access token (Settings → Developer settings
+#              → Personal access tokens → Fine-grained tokens)
+# Resource:    only the repository i4erkasov/homebrew-m14t-touch
+# Permissions: Contents: Read and write     (to push the branch)
+#              Pull requests: Read and write (to open the PR)
+#              nothing else — no Actions, no Administration, no other repository
+# Added at:    github.com/i4erkasov/m14t-touch-macos → Settings → Secrets and
+#              variables → Actions → New repository secret
+#
+# The built-in GITHUB_TOKEN cannot be used: it is scoped to this repository and
+# the tap is a different one.
 
 name: Release
 
@@ -26,7 +33,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to push to the tap, e.g. v1.0.3"
+        description: "Release tag to push to the tap, e.g. v1.0.4"
         required: true
         type: string
 
@@ -46,51 +53,47 @@ jobs:
     name: Update the Homebrew cask
     runs-on: ubuntu-latest
     steps:
-      - name: Check the token is there
+      - name: Fail now if the token is missing
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
         run: |
-          if [ -z "${{ secrets.TAP_TOKEN }}" ]; then
-            echo "::error::TAP_TOKEN is not set. Create a fine-grained PAT with" \
-                 "Contents and Pull requests write access on $TAP_REPO and add it" \
-                 "as a repository secret named TAP_TOKEN."
+          if [ -z "${TAP_TOKEN:-}" ]; then
+            {
+              echo "### The cask was not updated"
+              echo
+              echo "The secret \`TAP_TOKEN\` is not set on this repository, so this"
+              echo "workflow cannot push a branch to \`$TAP_REPO\`."
+              echo
+              echo "Create a **fine-grained** personal access token scoped to"
+              echo "\`$TAP_REPO\` alone, with **Contents: Read and write** and"
+              echo "**Pull requests: Read and write**, and add it under"
+              echo "Settings → Secrets and variables → Actions as \`TAP_TOKEN\`."
+              echo
+              echo "Then re-run this workflow, or run it by hand from the Actions"
+              echo "tab with the release tag."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error title=TAP_TOKEN missing::Add a fine-grained PAT named TAP_TOKEN (Contents + Pull requests, write, on $TAP_REPO). See the job summary."
             exit 1
           fi
 
-      - name: Work out the version and the asset
+      - name: Work out which release this is
         id: release
         env:
           TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           set -euo pipefail
-          case "$TAG" in
-            v[0-9]*) ;;
-            *) echo "::error::tag '$TAG' is not of the form vX.Y.Z"; exit 1 ;;
-          esac
-          {
-            echo "tag=$TAG"
-            echo "version=${TAG#v}"
-            echo "asset=M14t-Touch-$TAG.dmg"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Download the published DMG and check its SHA-256
-        id: asset
-        env:
-          TAG: ${{ steps.release.outputs.tag }}
-          ASSET: ${{ steps.release.outputs.asset }}
-        run: |
-          set -euo pipefail
-          url="https://github.com/${{ github.repository }}/releases/download/$TAG/$ASSET"
-          echo "Fetching $url"
-          # --fail so an HTML 404 page never gets checksummed as if it were a DMG.
-          curl --fail --silent --show-error --location --retry 3 --output "$ASSET" "$url"
-          file "$ASSET"
-          sha="$(sha256sum "$ASSET" | cut -d' ' -f1)"
-          bytes="$(stat -c%s "$ASSET")"
-          if [ "$bytes" -lt 100000 ]; then
-            echo "::error::$ASSET is only $bytes bytes — that is not the disk image"
+          if [ -z "${TAG:-}" ]; then
+            echo "::error::No tag: this ran neither from a published release nor with an input."
             exit 1
           fi
-          echo "sha256=$sha" >> "$GITHUB_OUTPUT"
-          echo "$ASSET: $bytes bytes, sha256 $sha"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "Release $TAG" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check out this repository, for the scripts
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Check out the tap
         uses: actions/checkout@v4
@@ -99,51 +102,28 @@ jobs:
           token: ${{ secrets.TAP_TOKEN }}
           path: tap
 
-      - name: Write the new version into the cask
-        id: edit
+      - name: Point the cask at the release
+        id: cask
         env:
-          VERSION: ${{ steps.release.outputs.version }}
-          SHA256: ${{ steps.asset.outputs.sha256 }}
+          TAG: ${{ steps.release.outputs.tag }}
         run: |
           set -euo pipefail
-          cd tap
-          python3 - <<'PY'
-          import os, re, sys
+          ./scripts/update-cask.sh "$TAG" "$GITHUB_WORKSPACE/tap" | tee /tmp/update.log
+          grep -q '^changed=yes$' /tmp/update.log && changed=yes || changed=no
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
 
-          path = os.environ["CASK_PATH"]
-          version, sha = os.environ["VERSION"], os.environ["SHA256"]
-          text = original = open(path, encoding="utf-8").read()
-
-          text, n = re.subn(r'^(\s*version\s+)"[^"]*"', rf'\g<1>"{version}"',
-                            text, count=1, flags=re.M)
-          if n != 1:
-              sys.exit(f"no version stanza in {path}")
-          text, n = re.subn(r'^(\s*sha256\s+)"[^"]*"', rf'\g<1>"{sha}"',
-                            text, count=1, flags=re.M)
-          if n != 1:
-              sys.exit(f"no sha256 stanza in {path}")
-
-          if text == original:
-              print("changed=no")
-          else:
-              open(path, "w", encoding="utf-8").write(text)
-              print("changed=yes")
-          PY
-          if git diff --quiet; then
-            echo "changed=no" >> "$GITHUB_OUTPUT"
-            echo "The cask already says $VERSION with this checksum — nothing to do."
-          else
-            echo "changed=yes" >> "$GITHUB_OUTPUT"
-            git diff
-          fi
+      - name: Say so and stop, if there was nothing to change
+        if: steps.cask.outputs.changed != 'yes'
+        run: |
+          echo "The cask already describes this release; no pull request opened." \
+            >> "$GITHUB_STEP_SUMMARY"
 
       - name: Open a pull request against the tap
-        if: steps.edit.outputs.changed == 'yes'
+        if: steps.cask.outputs.changed == 'yes'
         env:
           GH_TOKEN: ${{ secrets.TAP_TOKEN }}
-          VERSION: ${{ steps.release.outputs.version }}
           TAG: ${{ steps.release.outputs.tag }}
-          SHA256: ${{ steps.asset.outputs.sha256 }}
+          VERSION: ${{ steps.release.outputs.version }}
         run: |
           set -euo pipefail
           cd tap
@@ -154,21 +134,25 @@ jobs:
           git commit -am "m14t-touch $VERSION"
           git push --force origin "$branch"
 
-          # Nothing is pushed to main: the checksum and the release notes get a
-          # human's eye before anyone's `brew upgrade` starts trusting them.
+          # A pull request, never a push to main: the checksum gets a human's
+          # eye before anyone's `brew upgrade` starts trusting it.
+          {
+            echo "[Release $TAG](https://github.com/${{ github.repository }}/releases/tag/$TAG) is published."
+            echo
+            echo "The version and checksum were taken from the asset GitHub is serving,"
+            echo "downloaded by this workflow — not from a local build."
+            echo
+            echo '```diff'
+            git --no-pager diff HEAD~1 -- "$CASK_PATH" | grep -E '^[-+][^-+]' || true
+            echo '```'
+            echo
+            echo "Before merging: \`brew audit --cask --strict --online m14t-touch\` and \`brew style\`."
+          } > /tmp/pr-body.md
+
           if gh pr view "$branch" --repo "$TAP_REPO" >/dev/null 2>&1; then
-            echo "A pull request for $branch is already open; the branch was updated."
+            echo "Updated the existing pull request for \`$branch\`." >> "$GITHUB_STEP_SUMMARY"
           else
-            gh pr create --repo "$TAP_REPO" \
-              --base main --head "$branch" \
-              --title "m14t-touch $VERSION" \
-              --body "$(printf '%s\n' \
-                "[Release $TAG](https://github.com/${{ github.repository }}/releases/tag/$TAG) is published." \
-                "" \
-                "- version: \`$VERSION\`" \
-                "- sha256: \`$SHA256\`" \
-                "" \
-                "The checksum is of the asset GitHub is serving, downloaded by this workflow — not of a local build." \
-                "" \
-                "Before merging: \`brew audit --cask --strict --online m14t-touch\` and \`brew style\`.")"
+            url=$(gh pr create --repo "$TAP_REPO" --base main --head "$branch" \
+                    --title "m14t-touch $VERSION" --body-file /tmp/pr-body.md)
+            echo "Opened $url" >> "$GITHUB_STEP_SUMMARY"
           fi
