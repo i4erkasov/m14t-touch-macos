@@ -139,6 +139,54 @@ brew install --cask i4erkasov/m14t-touch/m14t-touch</code></pre>
   missing — a disconnected panel, or a permission that was not granted.
 </div>
 
+<h2>Updating</h2>
+
+<pre><code>brew update
+brew upgrade --cask m14t-touch</code></pre>
+
+<p>Your settings and your calibration are untouched by an upgrade, and so are
+   the two permissions: every release is signed with the same identity, and
+   macOS ties Input Monitoring and Accessibility to that signature rather than
+   to the bytes or the path. The app quits itself on the way — it holds the
+   panel exclusively, so it has to let go before the new copy can take over.</p>
+
+<p>The app also checks for new versions itself, under
+   <strong>Settings… → General</strong>, but it only tells you; installing is
+   the command above, or a download from
+   <a href="https://github.com/i4erkasov/m14t-touch-macos/releases">Releases</a>.</p>
+
+<h2>Uninstalling</h2>
+
+<pre><code>brew uninstall --cask m14t-touch</code></pre>
+
+<p>That removes the app and <strong>keeps your settings and your
+   calibration</strong>, so reinstalling later picks up where you left off. To
+   remove those as well:</p>
+
+<pre><code>brew uninstall --zap --cask m14t-touch</code></pre>
+
+<p>Which deletes exactly four things, all of them written by this app and
+   nothing else:</p>
+
+<ul>
+  <li><code>~/.m14ttouch.json</code> — the calibration, one entry per display</li>
+  <li><code>~/Library/Preferences/com.m14ttouch.app.plist</code> — every setting</li>
+  <li><code>~/Library/Caches/com.m14ttouch.app</code> and
+      <code>~/Library/HTTPStorages/com.m14ttouch.app</code> — left by the update
+      check</li>
+</ul>
+
+<p>Installed by hand instead? Drag <strong>M14t Touch</strong> from Applications
+   to the Trash, and delete those same four paths if you want them gone. Either
+   way, macOS keeps the entries it made for the app in
+   <strong>Privacy &amp; Security</strong> and, if you switched
+   <strong>Open at login</strong> on, in <strong>General → Login Items</strong>;
+   those are yours to clear there, as they are for any app.</p>
+
+<p>To remove the tap too:</p>
+
+<pre><code>brew untap i4erkasov/m14t-touch</code></pre>
+
 <h2>What it needs</h2>
 
 <table>

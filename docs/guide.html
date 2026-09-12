@@ -60,7 +60,11 @@
   <dt>Open at login</dt>
   <dd>Registers the app with macOS so it starts when you log in. It appears only
       in the installed app, and macOS may ask you to approve it under Login
-      Items.</dd>
+      Items. If the app later moves — installed to <code>/Applications</code> by
+      Homebrew when it had been sitting in <code>~/Applications</code>, say —
+      macOS keeps the registration pointed at the old copy; the app notices that
+      on its next launch and registers itself again from where it now lives, so
+      there is nothing to switch off and on.</dd>
 
   <dt>About</dt>
   <dd>Which version this is, and whether a newer one has been released. The
